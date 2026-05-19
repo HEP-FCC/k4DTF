@@ -23,8 +23,10 @@ for use inside [FCCAnalyses](https://github.com/HEP-FCC/FCCAnalyses).
   - [Gaudi / k4FWCore](#gaudi--k4fwcore)
   - [FCCAnalyses / RDataFrame](#fccanalyses--rdataframe)
 - [Algorithm](#algorithm)
+- [Implementing the algorithm](#implementing-the-algorithm)
 - [References](#references)
 - [Contributing](#contributing)
+- [Acknowledgements](#acknowledgements)
 
 ---
 
@@ -50,19 +52,20 @@ The fit output includes:
 
 ```
 k4DTF/
-├── CMakeLists.txt                        # Top-level build; auto-detects Gaudi
+├── CMakeLists.txt                        # Top-level build
 ├── cmake/
 │   └── k4DTFConfig.cmake.in             # Makes k4DTF find_package()-able
 │
-├── k4DTF/                               # Core library — no Gaudi dependency
+├── k4DTF/                               # Core library
 │   ├── include/k4DTF/
-│   │   ├── DTFParticle.h                # Internal particle (p4 + covariance)
+│   │   ├── DTFParticle.h                # Internal particle (p4 + covariance + EDM4hep conversions)
 │   │   ├── DecayDescriptor.h            # Decay topology parser
 │   │   ├── FitResult.h                  # Fit output structure
 │   │   └── DecayTreeFitter.h            # Main fitter class
 │   └── src/
+│       ├── DTFParticle.cpp              # fromEDM4hep / toEDM4hep implementations
 │       ├── DecayDescriptor.cpp
-│       └── DecayTreeFitter.cpp
+│       └── DecayTreeFitter.cpp          # ← implement the fit here
 │
 ├── k4DTFGaudi/                          # Gaudi plugin (requires k4FWCore)
 │   ├── include/k4DTFGaudi/
@@ -77,9 +80,13 @@ k4DTF/
 │   └── src/
 │       └── DTFFunctions.cpp
 │
+├── examples/
+│   └── analysis_B0_to_Kpi.py           # FCCAnalyses analysis example
+│
 └── test/
-    ├── CMakeLists.txt                   # Requires Catch2 >= 3
-    └── test_core.cpp
+    ├── CMakeLists.txt                   # Catch2 + CTest
+    ├── test_core.cpp                    # C++ unit tests
+    └── test_fccanalyses_pipeline.py     # RDataFrame pipeline test
 ```
 
 ---
@@ -89,7 +96,7 @@ k4DTF/
 | Package | Required by | Notes |
 |---|---|---|
 | ROOT (MathCore, Matrix, Physics, ROOTVecOps) | Core, FCCAnalyses wrapper | >= 6.28 |
-| EDM4HEP | Gaudi wrapper, FCCAnalyses wrapper | |
+| EDM4HEP | Core, Gaudi wrapper, FCCAnalyses wrapper | |
 | podio | Gaudi wrapper, FCCAnalyses wrapper | |
 | Gaudi | Gaudi wrapper | Required |
 | k4FWCore | Gaudi wrapper | Required |
@@ -121,7 +128,7 @@ source /cvmfs/sw-nightlies.hsf.org/key4hep/releases/2026-02-26/x86_64-almalinux9
 ### 2. Build and install
 
 ```bash
-git clone https://github.com/<org>/k4DTF.git
+git clone https://github.com/HEP-FCC/k4DTF.git
 cd k4DTF
 cmake -B build -DCMAKE_INSTALL_PREFIX=$PWD/install
 cmake --build build -j$(nproc)
@@ -265,6 +272,10 @@ Load the library in your analysis script and use the free functions as
 import ROOT
 ROOT.gSystem.Load("libk4DTFFCCAnalyses")
 
+# Make k4DTF functions and edm4hep types visible to the ROOT JIT compiler
+ROOT.gInterpreter.Declare('#include "k4DTFFCCAnalyses/DTFFunctions.h"')
+ROOT.gInterpreter.Declare('#include "edm4hep/ReconstructedParticleData.h"')
+
 df = (
     ROOT.RDataFrame("events", "input.root")
     .Define("B0_DTF_chi2",
@@ -286,7 +297,7 @@ df = df.Define("B0_DTF_chi2",
     ["B0_daughters"])
 ```
 
-Available functions (all in namespace `k4DTFFCCAnalyses`):
+Available functions (all in namespace `k4DTF`):
 
 | Function | Return type | Description |
 |---|---|---|
@@ -335,6 +346,99 @@ The two main TODOs in `k4DTF/src/DecayTreeFitter.cpp` are
 
 ---
 
+## Implementing the algorithm
+
+The repository is a skeleton.  All interfaces, build system, tests, and
+framework wrappers are in place; the actual math in
+`k4DTF/src/DecayTreeFitter.cpp` is left as stubs.  The four functions to fill
+in, in order, are:
+
+### 1. `initialiseState()`
+
+Build the state vector `state.x` (and its copy `state.x0`) from the measured
+four-momenta of the input `DTFParticle` array, and fill `state.C` (and
+`state.C0`) from the corresponding covariance matrices.
+
+Each particle contributes four parameters `(px, py, pz, E)`, so for `n`
+daughters the state vector has `4n` elements.  The 10-element upper-triangle
+covariance of each particle maps to a `4×4` block on the diagonal of the full
+covariance matrix (the cross-particle covariances are zero at input).
+
+The EDM4hep upper-triangle index convention for `(px, py, pz, E)` is:
+
+```
+cov[0]  = σ²(px,px)
+cov[1]  = σ(px,py)   cov[2]  = σ²(py,py)
+cov[3]  = σ(px,pz)   cov[4]  = σ(py,pz)   cov[5]  = σ²(pz,pz)
+cov[6]  = σ(px,E)    cov[7]  = σ(py,E)    cov[8]  = σ(pz,E)    cov[9]  = σ²(E,E)
+```
+
+### 2. `buildConstraints()`
+
+Populate the constraint vector `state.h` and the Jacobian `state.H`
+(`∂h/∂x`) for the current value of `state.x`.
+
+**Four-momentum conservation** at a decay node with daughters `i` and `j`
+gives four constraints:
+
+```
+h_μ = Σ_daughters p_μ^daughter - p_μ^mother = 0
+```
+
+Because the mother four-momentum is the sum of the daughters, this reduces to
+a linear constraint — `H` has `+1` entries at the daughter columns and `-1`
+(or `0`) at the mother column if the mother is also a free parameter.
+
+**Mass constraint** on a node (PDG code `pdg`, target mass `m`) adds one
+constraint:
+
+```
+h = (Σ p_μ)^2 - m^2 = E² - |p|² - m² = 0
+```
+
+The Jacobian row for this constraint is `∂h/∂p_μ = 2(Σ p_μ)` evaluated at
+the current `state.x`.
+
+Vertex constraints (production vertex position) are optional and require
+track helix parameters; see the `setVertexConstraint()` method.
+
+### 3. `iterate()`
+
+Apply one Newton step of the Lagrange-multiplier update (Moser & Roussarie
+eq. 14):
+
+```
+W      = H C H^T          (constraint covariance, size n_c × n_c)
+lambda = W^{-1} (h + H (x - x0))
+x_new  = x0 - C H^T lambda
+chi2   = lambda^T W lambda
+```
+
+`W` is inverted with `TMatrixD::Invert()`.  After each step, call
+`buildConstraints()` again with the updated `state.x` and check
+`|Δchi2| < m_convergenceEps` for convergence.
+
+### 4. `extractResult()`
+
+Unpack `state.x` back into `FitResult::fittedParticles`: create one
+`DTFParticle` per input daughter, copy the fitted `(px, py, pz, E)` from the
+state vector, and copy the updated covariance from the diagonal block of
+`state.C`.
+
+Set `result.chi2`, `result.ndf` (number of constraints minus number of free
+parameters), `result.nIter`, and `result.status = FitResult::Status::Success`.
+
+### Where to look
+
+| File | What to change |
+|---|---|
+| `k4DTF/src/DecayTreeFitter.cpp` | The four stub functions above |
+| `k4DTF/include/k4DTF/FitResult.h` | `prob()` stub — replace `return 0.0` with `TMath::Prob(chi2, ndf)` |
+| `test/test_core.cpp` | Tighten the fitter tests once results are non-trivial |
+| `test/test_fccanalyses_pipeline.py` | Replace the loose `is not None` assertions with numerical checks |
+
+---
+
 ## References
 
 ### Fit algorithm
@@ -343,10 +447,6 @@ The two main TODOs in `k4DTF/src/DecayTreeFitter.cpp` are
   Nucl. Instrum. Meth. A **384** (1997) 491–505.
   The canonical reference for the Lagrange-multiplier decay-tree fitter formalism
   used here (constraint matrix, Newton update, chi-square expression).
-
-- P. Billoir, *"Track fitting with multiple scattering: a new method"*,
-  Nucl. Instrum. Meth. **225** (1984) 352–366.
-  Underpins the linear-algebra update step used in the iterative solver.
 
 ### Software frameworks and data model
 
@@ -385,3 +485,8 @@ Source files should carry the following SPDX header:
 Contributions are welcome. Please open an issue or pull request on GitHub.
 The project follows the Key4hep coding conventions and uses `clang-format`
 (LLVM style) for formatting.
+
+## Acknowledgements
+
+The initial skeleton of this project was developed with the assistance of
+[Claude](https://www.anthropic.com/claude) (Anthropic).
