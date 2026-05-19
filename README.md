@@ -22,7 +22,6 @@ for use inside [FCCAnalyses](https://github.com/HEP-FCC/FCCAnalyses).
   - [Core C++ library](#core-c-library)
   - [Gaudi / k4FWCore](#gaudi--k4fwcore)
   - [FCCAnalyses / RDataFrame](#fccanalyses--rdataframe)
-- [Algorithm](#algorithm)
 - [Implementing the algorithm](#implementing-the-algorithm)
 - [References](#references)
 - [Contributing](#contributing)
@@ -308,41 +307,6 @@ Available functions (all in namespace `k4DTF`):
 | `DTF_chi2_single` | `float` | convenience wrapper for a single candidate |
 
 All functions return `-1` (or an empty vector) when the fit does not converge.
-
----
-
-## Algorithm
-
-The fitter uses Lagrange multipliers to solve the constrained least-squares
-problem
-
-```
-min (x - x0)^T C0^{-1} (x - x0)   subject to  h(x) = 0
-```
-
-where `x` is the state vector of four-momenta, `x0` the measured values,
-`C0` their covariance, and `h(x)` the constraint vector.  The Newton update
-at each iteration is:
-
-```
-lambda  = (H C H^T)^{-1} (H (x - x0) + h)
-x_new   = x0 - C H^T lambda
-chi2    = lambda^T (H C H^T) lambda
-```
-
-Convergence is declared when `|delta chi2| < eps` (default `1e-6`).
-
-Supported constraints:
-
-| Constraint | Status |
-|---|---|
-| Four-momentum conservation at each decay node | to implement in `buildConstraints()` |
-| Mass constraint on any node | to implement in `buildConstraints()` |
-| Vertex constraint (production vertex) | to implement — requires track parameters |
-
-The two main TODOs in `k4DTF/src/DecayTreeFitter.cpp` are
-`buildConstraints()` (populate `h` and the Jacobian `H`) and `iterate()`
-(the Newton step shown above).
 
 ---
 
