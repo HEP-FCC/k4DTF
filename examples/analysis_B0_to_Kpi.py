@@ -19,6 +19,7 @@ import ROOT
 # ---------------------------------------------------------------------------
 ROOT.gSystem.Load("libk4DTFFCCAnalyses")
 
+ROOT.gInterpreter.Declare('#include "k4DTFFCCAnalyses/DTFFunctions.h"')
 ROOT.gInterpreter.Declare('#include "edm4hep/ReconstructedParticleData.h"')
 
 # ---------------------------------------------------------------------------

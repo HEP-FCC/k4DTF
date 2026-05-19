@@ -22,6 +22,9 @@ if ROOT.gSystem.Load("libk4DTFFCCAnalyses") < 0:
     print("ERROR: could not load libk4DTFFCCAnalyses", file=sys.stderr)
     sys.exit(1)
 
+# Make the k4DTF namespace and edm4hep types visible to the JIT compiler
+# used by RDataFrame string-based Define expressions.
+ROOT.gInterpreter.Declare('#include "k4DTFFCCAnalyses/DTFFunctions.h"')
 ROOT.gInterpreter.Declare('#include "edm4hep/ReconstructedParticleData.h"')
 
 # ---------------------------------------------------------------------------

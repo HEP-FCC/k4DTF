@@ -73,10 +73,18 @@ DTFAlgorithm::operator()(
   edm4hep::VertexCollection fittedVertices;
 
   // --- convert edm4hep → DTFParticle ---
+  // ReconstructedParticle is a proxy; extract ReconstructedParticleData first.
   std::vector<k4DTF::DTFParticle> dtfParticles;
   dtfParticles.reserve(inputParticles.size());
-  for (const auto& rp : inputParticles)
-    dtfParticles.push_back(k4DTF::DTFParticle::fromEDM4hep(rp.getData()));
+  for (const auto& rp : inputParticles) {
+    edm4hep::ReconstructedParticleData data{};
+    data.momentum  = rp.getMomentum();
+    data.energy    = rp.getEnergy();
+    data.charge    = rp.getCharge();
+    data.PDG       = rp.getPDG();
+    data.covMatrix = rp.getCovMatrix();
+    dtfParticles.push_back(k4DTF::DTFParticle::fromEDM4hep(data));
+  }
 
   // --- run the fit ---
   const k4DTF::FitResult result = m_fitter->fit(dtfParticles);
