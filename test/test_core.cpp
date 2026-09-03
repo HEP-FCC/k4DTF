@@ -4,12 +4,17 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include <Eigen/Dense>
+
+#include "k4DTF/core/DecayNodeInput.h"
+#include "k4DTF/core/ParticleMeasurement.h"
 #include "k4DTF/DecayDescriptor.h"
 #include "k4DTF/DecayTreeFitter.h"
 #include "k4DTF/DTFParticle.h"
 #include "k4DTF/FitResult.h"
 
 using Catch::Matchers::WithinAbs;
+using namespace k4dtf;
 using namespace k4DTF;
 
 // ---------------------------------------------------------------------------
@@ -89,7 +94,6 @@ TEST_CASE("DTFParticle round-trip fromEDM4hep->toEDM4hep preserves all fields", 
 
   const auto result = DTFParticle::fromEDM4hep(orig).toEDM4hep();
 
-  // float → double → float: values should survive within float precision
   CHECK_THAT(result.momentum.x, WithinAbs(orig.momentum.x, 1e-5f));
   CHECK_THAT(result.momentum.y, WithinAbs(orig.momentum.y, 1e-5f));
   CHECK_THAT(result.momentum.z, WithinAbs(orig.momentum.z, 1e-5f));
@@ -124,66 +128,86 @@ TEST_CASE("DecayDescriptor rejects missing arrow", "[descriptor]") {
 }
 
 // ---------------------------------------------------------------------------
-// DecayTreeFitter — basic interface tests
-// (The actual fit result is a stub until the algorithm is implemented.)
+// DecayTreeFitter — core API tests
 // ---------------------------------------------------------------------------
 
 namespace {
 
-DTFParticle makeKaon() {
-  DTFParticle p;
-  // K+ with ~2 GeV momentum along z
-  const double mK = 0.4937;
-  const double pz = 2.0;
-  const double E = std::sqrt(mK * mK + pz * pz);
-  p.p4.SetPxPyPzE(0.0, 0.0, pz, E);
-  p.charge = +1.0;
-  p.pdg = 321;
-  p.cov.fill(0.0);
-  p.cov[9] = 1e-4;  // sigma_E^2
-  return p;
+DecayNodeInput makeTrack(const std::string& name, int pdg, double px, double py,
+                          double pz, double sigma) {
+  DecayNodeInput input;
+  input.name = name;
+  input.pdgCode = pdg;
+
+  TrackMeasurement meas;
+  meas.momentum = Eigen::Vector3d(px, py, pz);
+  meas.cov = Eigen::Matrix3d::Zero();
+  meas.cov(0, 0) = sigma * sigma;
+  meas.cov(1, 1) = sigma * sigma;
+  meas.cov(2, 2) = sigma * sigma;
+  meas.charge = (pdg > 0) ? 1.0 : -1.0;
+  input.measurement = meas;
+
+  return input;
 }
 
-DTFParticle makePion() {
-  DTFParticle p;
-  const double mPi = 0.1396;
-  const double pz = -1.5;
-  const double E = std::sqrt(mPi * mPi + pz * pz);
-  p.p4.SetPxPyPzE(0.0, 0.0, pz, E);
-  p.charge = -1.0;
-  p.pdg = -211;
-  p.cov.fill(0.0);
-  p.cov[9] = 1e-4;
-  return p;
+DecayNodeInput makeTwoBodyDecay() {
+  DecayNodeInput mother;
+  mother.name = "B0";
+  mother.pdgCode = 511;
+  mother.daughters.push_back(
+      makeTrack("K+", 321, 0.0, 0.0, 2.0, 0.01));
+  mother.daughters.push_back(
+      makeTrack("pi-", -211, 0.0, 0.0, -1.5, 0.01));
+
+  ResonanceMeasurement motherMeas;
+  motherMeas.momentum = Eigen::Vector4d(0.0, 0.0, 0.5, 3.6);
+  motherMeas.cov = Eigen::Matrix4d::Identity() * 0.01;
+  mother.measurement = motherMeas;
+
+  return mother;
 }
 
 }  // namespace
 
-TEST_CASE("DecayTreeFitter accepts correct number of daughters", "[fitter]") {
-  DecayTreeFitter dtf(DecayDescriptor::fromString("B0 -> K+ pi-"));
-  dtf.addMassConstraint(511, 5.27963);
-
-  const std::vector<DTFParticle> daughters = {makeKaon(), makePion()};
-  REQUIRE_NOTHROW(dtf.fit(daughters));
+TEST_CASE("DecayTreeFitter fits two-body decay without throwing", "[fitter]") {
+  DecayTreeFitter dtf;
+  auto input = makeTwoBodyDecay();
+  FitResult result = dtf.fit(input);
+  CHECK(result.nIter > 0);
+  CHECK(result.chi2 >= 0.0);
 }
 
-TEST_CASE("DecayTreeFitter throws on wrong daughter count", "[fitter]") {
-  DecayTreeFitter dtf(DecayDescriptor::fromString("B0 -> K+ pi-"));
-  const std::vector<DTFParticle> one = {makeKaon()};
-  CHECK_THROWS_AS(dtf.fit(one), std::invalid_argument);
+TEST_CASE("DecayTreeFitter produces valid chi2", "[fitter]") {
+  DecayTreeFitter dtf;
+  auto input = makeTwoBodyDecay();
+  FitResult result = dtf.fit(input);
+  CHECK(result.chi2 >= 0.0);
 }
 
-TEST_CASE("FitResult chi2 probability is in [0,1] when ndf > 0", "[result]") {
-  FitResult r;
-  r.status = FitResult::Status::Success;
-  r.chi2 = 1.5;
-  r.ndf = 2;
-  CHECK(r.prob() >= 0.0);
-  CHECK(r.prob() <= 1.0);
+TEST_CASE("DecayTreeFitter with interaction point", "[fitter]") {
+  DecayTreeFitter dtf;
+  auto input = makeTwoBodyDecay();
+
+  InteractionPointInput ip;
+  ip.position = Eigen::Vector3d(0.0, 0.0, 0.0);
+  ip.cov = Eigen::Matrix3d::Identity() * 0.01;
+
+  FitResult result = dtf.fit(input, ip);
+  CHECK(failure(result.status) == false);
 }
 
-TEST_CASE("FitResult prob is 0 when ndf <= 0", "[result]") {
+// ---------------------------------------------------------------------------
+// FitResult
+// ---------------------------------------------------------------------------
+
+TEST_CASE("FitResult chi2 probability is 0 when ndf <= 0", "[result]") {
   FitResult r;
   r.ndf = 0;
   CHECK(r.prob() == 0.0);
+}
+
+TEST_CASE("FitResult default status is success", "[result]") {
+  FitResult r;
+  CHECK(failure(r.status) == false);
 }

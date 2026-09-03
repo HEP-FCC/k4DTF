@@ -36,14 +36,13 @@ decay chain.  Starting from the measured four-momenta and their covariance
 matrices of the final-state particles, it enforces a set of constraints
 (four-momentum conservation at each decay node, optional mass constraints,
 optional vertex constraints) using Lagrange multipliers, following the
-approach of Moser & Roussarie (*NIM* A 384, 1997).
+approach Hulsbergen 2024 (arXiv https://arxiv.org/abs/physics/0503191, NIMA Nucl.Instrum.Meth. A552 (2005) 566-575.)
 
 The fit output includes:
 
-- Fitted four-momenta and updated covariances for all particles in the decay
+- Fitted four-momenta, vertex positions and updated covariances for all particles in the decay
   tree.
 - A chi-square value and number of degrees of freedom.
-- A fitted production vertex (when vertex constraints are enabled).
 
 ---
 

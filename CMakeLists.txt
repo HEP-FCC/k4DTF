@@ -22,6 +22,7 @@ include(CMakePackageConfigHelpers)
 find_package(ROOT REQUIRED COMPONENTS Core EG Physics MathCore Matrix)
 find_package(EDM4HEP REQUIRED)
 find_package(podio REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 find_package(Gaudi REQUIRED)
 find_package(k4FWCore REQUIRED)
