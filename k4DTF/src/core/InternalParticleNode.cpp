@@ -18,8 +18,10 @@ InternalParticleNode::InternalParticleNode(const DecayNodeInput& input,
     auto dau = ParticleNode::create(dauInput, this);
     addDaughter(std::move(dau));
   }
+  setPdtMass(input.mass);
   if (input.applyMassConstraint) {
-    setPdtMass(input.massConstraintValue);
+    setPdtMass(input.massConstraintValue > 0 ? input.massConstraintValue : input.mass);
+    setHasMassConstraint(pdtMass() > 0);
   }
 }
 

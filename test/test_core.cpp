@@ -138,6 +138,7 @@ DecayNodeInput makeTrack(const std::string& name, int pdg, double px, double py,
   DecayNodeInput input;
   input.name = name;
   input.pdgCode = pdg;
+  input.mass = std::abs(pdg) == 321 ? 0.493677 : 0.13957;
 
   TrackMeasurement meas;
   meas.momentum = Eigen::Vector3d(px, py, pz);
@@ -197,9 +198,58 @@ TEST_CASE("DecayTreeFitter with interaction point", "[fitter]") {
   CHECK(failure(result.status) == false);
 }
 
+TEST_CASE("DecayTreeFitter needs a mass hypothesis for tracks", "[fitter]") {
+  DecayTreeFitter dtf;
+  auto input = makeTwoBodyDecay();
+  input.daughters[0].mass = -1;
+  CHECK(dtf.fit(input).status == ErrCode::badsetup);
+}
+
+TEST_CASE("DecayTreeFitter applies mass constraints", "[fitter]") {
+  // momentum-only tracks: 6 measurements, 6 track parameters, no vertex
+  // information, so the only constraint is the mass of the head
+  DecayTreeFitter dtf;
+  auto input = makeTwoBodyDecay();
+  input.daughters[0] = makeTrack("K+", 321, 0.3, 0.1, 2.0, 0.01);
+  input.daughters[1] = makeTrack("pi-", -211, -0.2, 0.05, -1.5, 0.01);
+  const auto free = dtf.fit(input);
+  REQUIRE(free.converged());
+  CHECK_THAT(free.chi2, WithinAbs(0.0, 1e-8));
+
+  input.applyMassConstraint = true;
+  input.massConstraintValue = 3.5;
+  const auto constrained = dtf.fit(input);
+  REQUIRE(constrained.converged());
+  CHECK(constrained.chi2 > 1.0);
+  REQUIRE_FALSE(constrained.nodes.empty());
+  CHECK_THAT(constrained.nodes[0].mass, WithinAbs(3.5, 1e-6));
+  // daughter masses are the hypotheses
+  CHECK_THAT(constrained.nodes[1].mass, WithinAbs(0.493677, 1e-6));
+  CHECK_THAT(constrained.nodes[2].mass, WithinAbs(0.13957, 1e-6));
+}
+
+TEST_CASE("FitResult stays valid after fit() returns", "[result]") {
+  DecayTreeFitter dtf;
+  FitResult result = dtf.fit(makeTwoBodyDecay());
+  REQUIRE(result.converged());
+  const FitResult copy = result;
+  REQUIRE(copy.fitParams() != nullptr);
+  REQUIRE(copy.nodes.size() == 3);
+  CHECK(copy.nodes[0].children == std::vector<int>{1, 2});
+  CHECK(copy.nodes[1].parent == 0);
+  CHECK(copy.nodes[1].name == "K+");
+}
+
 // ---------------------------------------------------------------------------
 // FitResult
 // ---------------------------------------------------------------------------
+
+TEST_CASE("FitResult chi2 probability", "[result]") {
+  FitResult r;
+  r.chi2 = 2.0;
+  r.ndf = 2;
+  CHECK_THAT(r.prob(), WithinAbs(std::exp(-1.0), 1e-9));
+}
 
 TEST_CASE("FitResult chi2 probability is 0 when ndf <= 0", "[result]") {
   FitResult r;

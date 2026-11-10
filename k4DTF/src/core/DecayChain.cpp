@@ -32,11 +32,14 @@ DecayChain::DecayChain(const DecayNodeInput& input,
   if (pv) {
     m_ipNode = std::make_unique<InteractionPointNode>(pv->position, pv->cov);
     m_mother = ParticleNode::create(input, m_ipNode.get());
+    m_decayHead = m_mother.get();
     m_ipNode->addDaughter(std::move(m_mother));
     m_mother = std::move(m_ipNode);
     m_ipNode = nullptr;
+    m_hasIP = true;
   } else {
     m_mother = ParticleNode::create(input, nullptr);
+    m_decayHead = m_mother.get();
   }
 
   m_dim = 0;
@@ -60,6 +63,11 @@ ErrCode DecayChain::init(FitParams& fitparams) {
   fitparams.resetCov();
   status |= m_mother->initCov(&fitparams);
   return status;
+}
+
+ErrCode DecayChain::initCov(FitParams& fitparams) const {
+  fitparams.resetCov();
+  return m_mother->initCov(&fitparams);
 }
 
 ErrCode DecayChain::filter(FitParams& reference, FitParams& fitparams) const {

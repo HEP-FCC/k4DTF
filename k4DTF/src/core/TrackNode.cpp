@@ -16,9 +16,12 @@ TrackNode::TrackNode(const DecayNodeInput& input, const ParticleNode* mother)
   m_momentum = meas.momentum;
   m_momCov = meas.cov;
   setCharge(static_cast<int>(meas.charge));
+  setPdtMass(input.mass);
 }
 
 ErrCode TrackNode::initPar1(FitParams* /*fitparams*/) {
+  // the energy of a track is computed from its mass hypothesis
+  if (pdtMass() < 0) return ErrCode::badsetup;
   return ErrCode::success;
 }
 

@@ -33,8 +33,12 @@ std::unique_ptr<ParticleNode> ParticleNode::create(const DecayNodeInput& input,
     return std::make_unique<InternalParticleNode>(input, nullptr);
   }
 
+  // Composites with a lifetime get their own decay vertex and a flight length
+  // from the mother's vertex (or from the interaction point, for the head);
+  // resonances share the vertex of their mother.
   if (isComposite) {
-    return std::make_unique<ResonanceNode>(input, mother);
+    if (input.isResonance) return std::make_unique<ResonanceNode>(input, mother);
+    return std::make_unique<InternalParticleNode>(input, mother);
   }
 
   return std::visit(
@@ -75,8 +79,15 @@ ErrCode ParticleNode::initCov(FitParams* fitparams) const {
     status |= dau->initCov(fitparams);
   }
 
+  // flight length: wide prior, like LHCb [mm]
+  int lenindex = lenIndex();
+  if (lenindex >= 0) {
+    const double sigl = 1000.0;
+    fitparams->cov()(lenindex, lenindex) = sigl * sigl;
+  }
+
   int posindex = posIndex();
-  if (posindex >= 0) {
+  if (posindex >= 0 && hasPosition()) {
     const double sigx = 10.0;
     const double sigy = 10.0;
     const double sigz = 50.0;

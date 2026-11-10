@@ -3,13 +3,15 @@
 
 #include "k4DTF/FitResult.h"
 
-#include <cmath>
+#include "TMath.h"
+#include "core/DecayChain.h"
+#include "core/FitParams.h"
 
 namespace k4dtf {
 
 double FitResult::prob() const {
-  if (ndf <= 0) return 0.0;
-  return 0.0;
+  if (ndf <= 0 || chi2 < 0) return 0.0;
+  return TMath::Prob(chi2, ndf);
 }
 
 } // namespace k4dtf
