@@ -78,10 +78,19 @@ protected:
     Projection p(params.dim(), dimC);
     p.reset();
     const Derived *self = static_cast<const Derived *>(this);
+    // Linearise the constraint at the reference (the result of the previous
+    // iteration), so that the result does not depend on the order in which
+    // constraints are applied, and evaluate it at the current parameters:
+    //   r(x) ~ r(x_ref) + H (x - x_ref)
     ErrCode status = (self->*proj)(reference, p);
     if (!failure(status)) {
+      p.r() += p.H() * (params.par() - reference.par());
+      // projections fill the lower triangle of V only
+      p.V() = p.V().template selfadjointView<Eigen::Lower>();
+      // The gain uses the current covariance, which already contains the
+      // constraints applied before this one.
       KalmanCalculator kalman;
-      status |= kalman.init(p.r(), p.H(), reference, &p.V());
+      status |= kalman.init(p.r(), p.H(), params, &p.V());
       if (!failure(status)) {
         kalman.updatePar(params);
         kalman.updateCov(params);

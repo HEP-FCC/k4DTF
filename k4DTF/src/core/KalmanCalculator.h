@@ -26,6 +26,7 @@ private:
   int              m_nparameters{0};
   Eigen::VectorXd  m_r;
   Eigen::MatrixXd  m_H;
+  Eigen::MatrixXd  m_V;  ///< constraint covariance (weighted), zero if none
   Eigen::MatrixXd  m_matrixCGT;
   Eigen::MatrixXd  m_matrixR;
   Eigen::MatrixXd  m_matrixRinv;

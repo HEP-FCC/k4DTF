@@ -21,19 +21,21 @@ ErrCode KalmanCalculator::init(const Eigen::VectorXd& r, const Eigen::MatrixXd& 
 
   // R = H * C * H^T + V
   if (V) {
-    m_matrixR = H * C * H.transpose() + weight * (*V);
+    m_V = weight * (*V);
   } else {
-    m_matrixR = H * C * H.transpose();
+    m_V = Eigen::MatrixXd::Zero(m_nconstraints, m_nconstraints);
   }
+  m_matrixR = H * C * H.transpose() + m_V;
 
-  // Invert R
-  m_matrixRinv = m_matrixR.inverse();
-
-  // Check for singularity (Eigen doesn't set an error flag, but we can check)
-  // A simple heuristic: if the determinant is extremely small, flag it
-  if (std::abs(m_matrixR.determinant()) < 1e-30) {
+  // Invert R. R is a covariance matrix, so check positive definiteness with a
+  // Cholesky decomposition rather than with the determinant, which scales with
+  // the units (a 5x5 helix covariance in mm and rad has det ~ 1e-40).
+  Eigen::LLT<Eigen::MatrixXd> llt(m_matrixR);
+  if (llt.info() != Eigen::Success) {
     status |= ErrCode::inversionerror;
+    return status;
   }
+  m_matrixRinv = llt.solve(Eigen::MatrixXd::Identity(m_nconstraints, m_nconstraints));
 
   // Kalman gain: K = C * H^T * R^{-1}
   m_matrixK = m_matrixCGT * m_matrixRinv;
@@ -56,9 +58,15 @@ void KalmanCalculator::updatePar(const Eigen::VectorXd& prediction, FitParams& f
 }
 
 void KalmanCalculator::updateCov(FitParams& fitparams) {
-  // deltaCov = -C * H^T * K^T = -K * R * K^T  (Joseph form for stability)
-  // Using the simpler form: C -= K * R * K^T
-  fitparams.cov() -= m_matrixK * m_matrixR * m_matrixK.transpose();
+  // Joseph form, C' = (1 - K H) C (1 - K H)^T + K V K^T. Algebraically equal
+  // to C - K R K^T, but stays positive semi-definite in floating point: the
+  // priors (e.g. 1 m on flight lengths) and the measurements (1e-7 /mm on
+  // omega) differ by many orders of magnitude, and the short form loses
+  // positive definiteness after a few constraints.
+  const Eigen::MatrixXd A =
+      Eigen::MatrixXd::Identity(m_nparameters, m_nparameters) - m_matrixK * m_H;
+  Eigen::MatrixXd C = A * fitparams.cov() * A.transpose() + m_matrixK * m_V * m_matrixK.transpose();
+  fitparams.cov() = 0.5 * (C + C.transpose());
 }
 
 } // namespace k4dtf
