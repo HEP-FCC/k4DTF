@@ -18,7 +18,8 @@ namespace {
 Eigen::MatrixXd subCov(const FitParams& fp, const std::vector<int>& idx) { return fp.cov(idx); }
 
 /// Fill NodeResults for `node` and its subtree in pre-order.
-void extractNode(const ParticleNode* node, const FitParams& fp, int parent, std::vector<NodeResult>& out) {
+void extractNode(const ParticleNode* node, const FitParams& fp, int parent, bool geometry,
+                 std::vector<NodeResult>& out) {
   const int me = static_cast<int>(out.size());
   out.emplace_back();
   {
@@ -55,7 +56,7 @@ void extractNode(const ParticleNode* node, const FitParams& fp, int parent, std:
 
     // decay vertex: composites only (tracks have no position of their own)
     const int pos = node->posIndex();
-    if (pos >= 0 && !node->daughters().empty()) {
+    if (geometry && pos >= 0 && !node->daughters().empty()) {
       r.hasDecayVertex = true;
       r.decayVertex = Eigen::Vector3d(fp.par(pos), fp.par(pos + 1), fp.par(pos + 2));
       r.decayVertexCov = subCov(fp, {pos, pos + 1, pos + 2});
@@ -63,7 +64,7 @@ void extractNode(const ParticleNode* node, const FitParams& fp, int parent, std:
 
     // flight length and proper decay length
     const int len = node->lenIndex();
-    if (len >= 0 && mom >= 0 && node->hasEnergy()) {
+    if (geometry && len >= 0 && mom >= 0 && node->hasEnergy()) {
       r.hasLifetime = true;
       const auto C = subCov(fp, {len, mom, mom + 1, mom + 2, mom + 3});
       const double L = fp.par(len);
@@ -86,7 +87,7 @@ void extractNode(const ParticleNode* node, const FitParams& fp, int parent, std:
   for (const auto* dau : node->daughters()) {
     const int child = static_cast<int>(out.size());
     out[me].children.push_back(child);
-    extractNode(dau, fp, me, out);
+    extractNode(dau, fp, me, geometry, out);
   }
 }
 
@@ -96,7 +97,7 @@ DecayTreeFitter::DecayTreeFitter(const Configuration& config)
     : m_config(config) {}
 
 FitResult DecayTreeFitter::fit(const DecayNodeInput& input,
-                                std::optional<InteractionPointInput> pv) {
+                                std::optional<InteractionPointInput> pv) const {
   FitResult result;
   result.status = ErrCode::success;
 
@@ -121,9 +122,14 @@ FitResult DecayTreeFitter::fit(const DecayNodeInput& input,
     result.status = status;
     result.chi2 = fitparams->chiSquare();
     result.ndf = fitparams->nDof();
+    // Without any position measurement, vertices and flight lengths are
+    // undetermined (they only have their prior): a kinematic fit. Do not
+    // count them as fitted parameters and do not report them.
+    const bool geometry = chain->hasPositionInformation();
+    if (!geometry) result.ndf += chain->nGeometricParameters();
     result.nIter = iter;
     if (!failure(status)) {
-      extractNode(chain->decayHead(), *fitparams, -1, result.nodes);
+      extractNode(chain->decayHead(), *fitparams, -1, geometry, result.nodes);
       result.m_fitParams = fitparams;
       result.m_decayChain = chain;
     }

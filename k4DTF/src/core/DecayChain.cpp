@@ -5,7 +5,11 @@
 
 #include <iostream>
 
+#include "core/CompositeNode.h"
 #include "core/FitParams.h"
+#include "core/MergedPi0Node.h"
+#include "core/PhotonNode.h"
+#include "core/TrackNode.h"
 
 namespace k4dtf {
 
@@ -45,6 +49,16 @@ DecayChain::DecayChain(const DecayNodeInput& input,
   m_dim = 0;
   m_mother->updateIndex(m_dim);
   m_nFinalState = countLeaves(m_mother.get());
+
+  m_hasPositionInfo = m_hasIP;
+  for (const auto* p : particles()) {
+    if (const auto* t = dynamic_cast<const TrackNode*>(p)) m_hasPositionInfo |= t->hasHelix();
+    if (dynamic_cast<const PhotonNode*>(p) || dynamic_cast<const CompositeNode*>(p) ||
+        dynamic_cast<const MergedPi0Node*>(p))
+      m_hasPositionInfo = true;
+    if (p->hasPosition()) m_nGeometric += 3;
+    if (p->lenIndex() >= 0) m_nGeometric += 1;
+  }
 }
 
 std::vector<ParticleNode*> DecayChain::particles() const {

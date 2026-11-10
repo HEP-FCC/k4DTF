@@ -22,8 +22,10 @@ public:
   DecayTreeFitter() = default;
   explicit DecayTreeFitter(const Configuration& config);
 
+  /// Fit a decay tree. Does not modify the fitter, so one instance can be
+  /// shared between threads.
   FitResult fit(const DecayNodeInput& input,
-                std::optional<InteractionPointInput> pv = std::nullopt);
+                std::optional<InteractionPointInput> pv = std::nullopt) const;
 
   void setConfiguration(const Configuration& config) { m_config = config; }
   const Configuration& configuration() const { return m_config; }

@@ -37,6 +37,15 @@ public:
 
   std::vector<ParticleNode*> particles() const;
 
+  /// False if no measurement in the tree constrains a position (momentum-only
+  /// tracks, no interaction point): then vertices and flight lengths are not
+  /// determined by the fit.
+  bool hasPositionInformation() const { return m_hasPositionInfo; }
+
+  /// Number of vertex and flight-length parameters; these are free when there
+  /// is no position information.
+  int nGeometricParameters() const { return m_nGeometric; }
+
   ErrCode init(FitParams& fitparams);
   ErrCode initCov(FitParams& fitparams) const;
   ErrCode filter(FitParams& reference, FitParams& fitparams) const;
@@ -46,6 +55,8 @@ private:
   std::unique_ptr<InteractionPointNode> m_ipNode;
   const ParticleNode* m_decayHead{nullptr};
   bool m_hasIP{false};
+  bool m_hasPositionInfo{false};
+  int m_nGeometric{0};
   int m_dim{0};
   int m_nFinalState{0};
 };
