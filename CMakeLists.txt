@@ -19,7 +19,7 @@ include(CMakePackageConfigHelpers)
 # ---------------------------------------------------------------------------
 # Dependencies
 # ---------------------------------------------------------------------------
-find_package(ROOT REQUIRED COMPONENTS Core EG Physics MathCore Matrix)
+find_package(ROOT REQUIRED COMPONENTS Core EG Physics MathCore Matrix RIO Tree TreePlayer)
 find_package(EDM4HEP REQUIRED)
 find_package(podio REQUIRED)
 find_package(Eigen3 REQUIRED)
@@ -33,6 +33,7 @@ find_package(k4FWCore REQUIRED)
 add_subdirectory(k4DTF)
 add_subdirectory(k4DTFGaudi)
 add_subdirectory(k4DTFFCCAnalyses)
+add_subdirectory(tools)
 
 # ---------------------------------------------------------------------------
 # Optional tests

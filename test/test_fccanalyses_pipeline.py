@@ -37,21 +37,25 @@ ROOT.gInterpreter.Declare(r"""
 ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> makeBDaughters() {
     ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> v(2);
 
-    // K+  (PDG 321, mass 493.7 MeV, pz = +2 GeV)
-    const double mK = 0.4937, pzK = 2.0;
+    // K+  (PDG 321, mass 493.7 MeV, pz = +2.5 GeV)
+    const double mK = 0.4937, pzK = 2.5;
     v[0].PDG      = 321;
     v[0].charge   = 1.f;
     v[0].momentum = {0.f, 0.f, static_cast<float>(pzK)};
     v[0].energy   = static_cast<float>(std::sqrt(mK*mK + pzK*pzK));
     v[0].mass     = static_cast<float>(mK);
 
-    // pi- (PDG -211, mass 139.6 MeV, pz = -1.5 GeV)
-    const double mPi = 0.1396, pzPi = -1.5;
+    // pi- (PDG -211, mass 139.6 MeV, pz = -2.5 GeV)
+    const double mPi = 0.1396, pzPi = -2.5;
     v[1].PDG      = -211;
     v[1].charge   = -1.f;
     v[1].momentum = {0.f, 0.f, static_cast<float>(pzPi)};
     v[1].energy   = static_cast<float>(std::sqrt(mPi*mPi + pzPi*pzPi));
     v[1].mass     = static_cast<float>(mPi);
+
+    // momentum covariance (lower triangle px, py, pz, E): sigma = 50 MeV
+    for (auto& p : v)
+        for (int i : {0, 2, 5, 9}) p.covMatrix[i] = 0.05f * 0.05f;
 
     return v;
 }
@@ -87,20 +91,12 @@ print(f"DTF n fitted ptcl = {len(nfitted)}")
 # ---------------------------------------------------------------------------
 # Assertions
 # ---------------------------------------------------------------------------
-# The fitter stub returns chi2 = 0 and empty fitted particles until
-# buildConstraints() / iterate() are implemented.  These checks will need
-# to be tightened once the algorithm is complete.
-
-# The pipeline must have run without crashing and returned defined values.
-assert chi2  is not None, "chi2 is None"
-assert prob  is not None, "prob is None"
-assert mass  is not None, "mass is None"
-
-# Once the fit is implemented, replace the lines above with, e.g.:
-#   assert chi2 > 0,            f"Expected chi2 > 0, got {chi2}"
-#   assert 0 < prob <= 1,       f"Expected prob in (0,1], got {prob}"
-#   assert abs(mass[0] - 5.27963) < 0.01, f"Fitted mass far from B0: {mass}"
-#   assert len(nfitted) == 2,   f"Expected 2 fitted daughters, got {len(nfitted)}"
+# Momentum-only fit with a B0 mass constraint: the invariant mass of the
+# inputs is 5.05 GeV, so the constraint pulls it to 5.27963 with chi2 > 0.
+assert chi2 > 0, f"Expected chi2 > 0, got {chi2}"
+assert 0 <= prob[0] <= 1, f"Expected prob in [0,1], got {prob[0]}"
+assert abs(mass[0] - 5.27963) < 1e-4, f"Fitted mass is not the constraint: {mass[0]}"
+assert len(nfitted) == 3, f"Expected 3 fitted particles (B0, K+, pi-), got {len(nfitted)}"
 
 print("PASS")
 sys.exit(0)

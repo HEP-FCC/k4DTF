@@ -12,6 +12,7 @@
 #include "edm4hep/VertexCollection.h"
 #include "k4FWCore/Transformer.h"
 
+#include "k4DTF/DecayDescriptor.h"
 #include "k4DTF/DecayTreeFitter.h"
 
 namespace k4DTF {
@@ -58,20 +59,19 @@ private:
 
   Gaudi::Property<std::map<std::string, double>> m_massConstraints{
       this, "MassConstraints", {},
-      "Map of PDG code (as string) -> mass [GeV] for mass constraints"};
+      "Map of PDG code (as string) -> mass [GeV] for mass constraints; a mass <= 0 means the nominal mass. "
+      "A code also applies to its charge conjugate."};
 
-  Gaudi::Property<bool> m_vertexConstraint{
-      this, "VertexConstraint", false,
-      "Apply vertex constraint at the production vertex"};
-
+  Gaudi::Property<double> m_Bz{
+      this, "Bz", 2.0, "Magnetic field [T] for the track helices"};
   Gaudi::Property<int> m_maxIterations{
-      this, "MaxIterations", 100, "Maximum number of fit iterations"};
-
+      this, "MaxIterations", 30, "Maximum number of fit iterations"};
   Gaudi::Property<double> m_convergenceEps{
       this, "ConvergenceEps", 1e-6,
-      "Convergence criterion |delta chi2| < eps"};
+      "Convergence criterion on delta chi2 (relative to max(1, ndf, chi2))"};
 
-  std::unique_ptr<k4DTF::DecayTreeFitter> m_fitter;
+  std::unique_ptr<k4DTF::DecayDescriptor> m_descriptor;
+  k4dtf::DecayTreeFitter m_fitter;
 };
 
 }  // namespace k4DTF

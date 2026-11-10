@@ -12,6 +12,8 @@
 #include "k4DTF/DecayTreeFitter.h"
 #include "k4DTF/DTFParticle.h"
 #include "k4DTF/FitResult.h"
+#include "k4DTF/ParticleTable.h"
+#include "k4DTF/TreeInput.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace k4dtf;
@@ -127,6 +129,201 @@ TEST_CASE("DecayDescriptor rejects missing arrow", "[descriptor]") {
                   std::invalid_argument);
 }
 
+TEST_CASE("DecayDescriptor parses nested decays", "[descriptor]") {
+  const auto desc = DecayDescriptor::fromString("B- -> (D0 -> K- pi+) K-");
+  const auto pdgs = desc.finalStatePdgs();
+  REQUIRE(pdgs.size() == 3);
+  CHECK(pdgs[0] == -321);
+  CHECK(pdgs[1] == 211);
+  CHECK(pdgs[2] == -321);
+
+  const auto& root = desc.root();
+  CHECK(root.pdg == -521);
+  REQUIRE(root.daughters.size() == 2);
+  CHECK(root.daughters[0].pdg == 421);
+  CHECK(root.daughters[0].daughters.size() == 2);
+  CHECK(root.daughters[1].isLeaf());
+}
+
+TEST_CASE("DecayDescriptor flattens in pre-order with contiguous leaf ranges", "[descriptor]") {
+  const auto desc = DecayDescriptor::fromString("B0 -> (D*(2010)- -> (D~0 -> K+ pi-) pi-) pi+");
+  const auto& f = desc.flatten();
+  REQUIRE(f.size() == 7);
+  // 0 B0, 1 D*-, 2 D~0, 3 K+, 4 pi-, 5 pi- (soft), 6 pi+
+  const int pdgs[7] = {511, -413, -421, 321, -211, -211, 211};
+  for (int i = 0; i < 7; ++i) CHECK(f[i].pdg == pdgs[i]);
+  CHECK(f[0].parent == -1);
+  CHECK(f[1].parent == 0);
+  CHECK(f[2].parent == 1);
+  CHECK(f[5].parent == 1);
+  CHECK(f[6].parent == 0);
+  CHECK(f[0].nLeaves == 4);
+  CHECK(f[1].firstLeaf == 0);
+  CHECK(f[1].nLeaves == 3);
+  CHECK(f[2].nLeaves == 2);
+  CHECK(f[6].leafIndex == 3);
+  CHECK(f[5].leafIndex == 2);
+  CHECK(desc.nLeaves() == 4);
+  CHECK(desc.leafNodes() == std::vector<int>{3, 4, 5, 6});
+  CHECK_THAT(f[2].mass, WithinAbs(1.86484, 1e-5));
+}
+
+TEST_CASE("DecayDescriptor toString round-trips nested decays", "[descriptor]") {
+  const auto a = DecayDescriptor::fromString("B0 -> (D*(2010)- -> (D~0 -> K+ pi-) pi-) pi+");
+  const auto b = DecayDescriptor::fromString(a.toString());
+  CHECK(a.toString() == "B0 -> (D*(2010)- -> (D~0 -> K+ pi-) pi-) pi+");
+  CHECK(b.finalStatePdgs() == a.finalStatePdgs());
+  CHECK(b.nNodes() == a.nNodes());
+}
+
+TEST_CASE("DecayDescriptor charge conjugation", "[descriptor]") {
+  const auto d = DecayDescriptor::fromString("B0 -> (D*(2010)- -> (D~0 -> K+ pi-) pi-) pi+");
+  const auto cc = d.chargeConjugate();
+  CHECK(cc.finalStatePdgs() == std::vector<int>{-321, 211, 211, -211});
+  CHECK(cc.root().pdg == -511);
+  CHECK_FALSE(d.isSelfConjugate());
+  CHECK(DecayDescriptor::fromString("B0 -> (J/psi(1S) -> mu+ mu-) (KS0 -> pi+ pi-)").isSelfConjugate());
+  // the CC string parses back
+  CHECK(DecayDescriptor::fromString(cc.toString()).finalStatePdgs() == cc.finalStatePdgs());
+}
+
+TEST_CASE("DecayDescriptor syntax errors", "[descriptor]") {
+  CHECK_THROWS_AS(DecayDescriptor::fromString("B0 -> (D0 -> K- pi+ pi+"), std::invalid_argument);
+  CHECK_THROWS_AS(DecayDescriptor::fromString("B0 -> D0 -> K- pi+"), std::invalid_argument);
+  CHECK_THROWS_AS(DecayDescriptor::fromString("B0 ->"), std::invalid_argument);
+  CHECK_THROWS_AS(DecayDescriptor::fromString("B0 -> NotAParticle"), std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
+// ParticleTable
+// ---------------------------------------------------------------------------
+
+TEST_CASE("ParticleTable understands LHCb, EvtGen and other spellings", "[particles]") {
+  using namespace ParticleTable;
+  CHECK(pdgFromName("D~0") == -421);
+  CHECK(pdgFromName("anti-D0") == -421);
+  CHECK(pdgFromName("D0bar") == -421);
+  CHECK(pdgFromName("D*(2010)-") == -413);
+  CHECK(pdgFromName("D*-") == -413);
+  CHECK(pdgFromName("KS0") == 310);
+  CHECK(pdgFromName("K_S0") == 310);
+  CHECK(pdgFromName("p~-") == -2212);
+  CHECK(pdgFromName("anti-p-") == -2212);
+  CHECK(pdgFromName("Lambda_c~-") == -4122);
+  CHECK(pdgFromName("e+") == -11);
+  CHECK(pdgFromName("mu-") == 13);
+  CHECK(pdgFromName("J/psi(1S)") == 443);
+  CHECK(pdgFromName("B_s~0") == -531);
+  CHECK(pdgFromName("-421") == -421);
+  CHECK_THROWS_AS(pdgFromName("Dzero"), std::invalid_argument);
+  CHECK(chargeConjugate(310) == 310);
+  CHECK(chargeConjugate(421) == -421);
+  CHECK(charge(-211) == -1.0);
+  CHECK(charge(11) == -1.0);
+  CHECK(nameFromPdg(-421) == "D~0");
+  CHECK(nameFromPdg(-413) == "D*(2010)-");
+  CHECK_THAT(mass(-511), WithinAbs(5.27958, 1e-6));
+}
+
+// ---------------------------------------------------------------------------
+// DTFTrack helpers
+// ---------------------------------------------------------------------------
+
+TEST_CASE("DTFTrack 4-momentum covariance matches numerical propagation", "[track]") {
+  auto t = DTFTrack::fromPositionMomentum({0.1, 0.2, 0.3}, {2.0, -1.0, 0.5}, +1.0, 2.0);
+  // correlated (phi, omega, tanLambda) covariance
+  t.setCov(1, 1, 1e-6);
+  t.setCov(2, 2, 1e-10);
+  t.setCov(4, 4, 4e-6);
+  t.setCov(2, 1, 2e-9);
+  t.setCov(4, 2, -1e-9);
+  const double m = 0.493677;
+  const auto analytic = t.p4Covariance(m);
+
+  auto p4of = [&](const DTFTrack& tr) {
+    const auto p = tr.momentum();
+    return std::array<double, 4>{p.X(), p.Y(), p.Z(), std::sqrt(p.Mag2() + m * m)};
+  };
+  const int params[3] = {1, 2, 4};
+  double J[4][3];
+  for (int k = 0; k < 3; ++k) {
+    const double h = 1e-6 * std::max(1e-6, std::abs(t.par[params[k]]));
+    auto up = t, dn = t;
+    up.par[params[k]] += h;
+    dn.par[params[k]] -= h;
+    const auto a = p4of(up), b = p4of(dn);
+    for (int i = 0; i < 4; ++i) J[i][k] = (a[i] - b[i]) / (2 * h);
+  }
+  int idx = 0;
+  for (int i = 0; i < 4; ++i) {
+    for (int j = 0; j <= i; ++j, ++idx) {
+      double s = 0;
+      for (int k = 0; k < 3; ++k)
+        for (int l = 0; l < 3; ++l) s += J[i][k] * t.covAt(params[k], params[l]) * J[j][l];
+      CHECK_THAT(analytic[idx], WithinAbs(s, 1e-6 * std::abs(s) + 1e-14));
+    }
+  }
+}
+
+TEST_CASE("DTFParticle from track fills an empty Delphes covariance", "[track]") {
+  const auto t = DTFTrack::fromPositionMomentum({0, 0, 0}, {1.0, 2.0, 3.0}, -1.0, 2.0);
+  auto ts = t.toEDM4hep();
+  for (int i = 0; i < 5; ++i) ts.covMatrix[i * (i + 1) / 2 + i] = 1e-6f;
+  edm4hep::ReconstructedParticleData rp{};
+  rp.momentum = {1.0f, 2.0f, 3.0f};
+  rp.charge = -1.0f;
+  rp.mass = 0.13957f;
+  rp.energy = std::sqrt(14.0f + rp.mass * rp.mass);
+
+  const auto dp = DTFParticle::fromEDM4hep(rp, ts, 2.0, 0.493677);
+  REQUIRE(dp.hasTrack());
+  CHECK_THAT(dp.mass(), WithinAbs(0.493677, 1e-6));
+  CHECK(dp.cov[0] > 0);  // sigma^2(px)
+  CHECK(dp.cov[9] > 0);  // sigma^2(E)
+}
+
+TEST_CASE("ParticleTable resonances", "[particles]") {
+  CHECK(ParticleTable::isResonance(-413));
+  CHECK(ParticleTable::isResonance(443));
+  CHECK_FALSE(ParticleTable::isResonance(421));
+  CHECK_FALSE(ParticleTable::isResonance(310));
+  CHECK_FALSE(ParticleTable::isResonance(511));
+}
+
+TEST_CASE("makeDecayNodeInput builds the tree in descriptor order", "[treeinput]") {
+  const auto desc = DecayDescriptor::fromString("B0 -> (D*(2010)- -> (D~0 -> K+ pi-) pi-) pi+");
+  std::vector<DTFParticle> leaves;
+  for (int i = 0; i < 4; ++i) {
+    auto t = DTFTrack::fromPositionMomentum({0, 0, 0}, {1.0 + i, 0.5, 0.2}, i == 0 || i == 3 ? 1 : -1, 2.0);
+    for (int k = 0; k < 5; ++k) t.setCov(k, k, 1e-6);
+    auto ts = t.toEDM4hep();
+    edm4hep::ReconstructedParticleData rp{};
+    rp.momentum = {float(1.0 + i), 0.5f, 0.2f};
+    rp.charge = static_cast<float>(t.charge());
+    rp.mass = 0.13957f;
+    leaves.push_back(DTFParticle::fromEDM4hep(rp, ts, 2.0));
+  }
+  const auto in = makeDecayNodeInput(desc, leaves, {421});
+  CHECK(in.pdgCode == 511);
+  CHECK_FALSE(in.isResonance);
+  REQUIRE(in.daughters.size() == 2);
+  const auto& dst = in.daughters[0];
+  CHECK(dst.pdgCode == -413);
+  CHECK(dst.isResonance);
+  CHECK_FALSE(dst.applyMassConstraint);
+  const auto& d0 = dst.daughters[0];
+  CHECK(d0.pdgCode == -421);
+  CHECK(d0.applyMassConstraint);  // 421 also constrains its charge conjugate
+  CHECK_THAT(d0.mass, WithinAbs(1.86484, 1e-5));
+  const auto& k = d0.daughters[0];
+  CHECK(k.pdgCode == 321);
+  CHECK_THAT(k.mass, WithinAbs(0.493677, 1e-6));  // mass hypothesis from the descriptor
+  REQUIRE(std::holds_alternative<TrackMeasurement>(k.measurement));
+  CHECK(std::get<TrackMeasurement>(k.measurement).helix.has_value());
+
+  CHECK_THROWS_AS(makeDecayNodeInput(desc, {leaves[0]}), std::invalid_argument);
+}
+
 // ---------------------------------------------------------------------------
 // DecayTreeFitter — core API tests
 // ---------------------------------------------------------------------------
@@ -223,6 +420,9 @@ TEST_CASE("DecayTreeFitter applies mass constraints", "[fitter]") {
   CHECK(constrained.chi2 > 1.0);
   REQUIRE_FALSE(constrained.nodes.empty());
   CHECK_THAT(constrained.nodes[0].mass, WithinAbs(3.5, 1e-6));
+  // no position measurement: a kinematic fit with one constraint, no vertex
+  CHECK(constrained.ndf == 1);
+  CHECK_FALSE(constrained.nodes[0].hasDecayVertex);
   // daughter masses are the hypotheses
   CHECK_THAT(constrained.nodes[1].mass, WithinAbs(0.493677, 1e-6));
   CHECK_THAT(constrained.nodes[2].mass, WithinAbs(0.13957, 1e-6));

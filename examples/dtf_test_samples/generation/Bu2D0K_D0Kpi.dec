@@ -1,0 +1,28 @@
+# EvtGen user decay file for k4DTF test samples
+#
+#   B- -> D0 K-,  D0 -> K- pi+   (+ c.c.)
+#
+# Decay descriptor (k4DTF / LHCb notation):
+#   B- -> (D0 -> K- pi+) K-
+#
+# Use with DelphesPythia8EvtGen_EDM4HEP_k4Interface ... 521 Bu_SIGNAL 1
+
+Alias      Bu_SIGNAL       B+
+Alias      Bubar_SIGNAL    B-
+ChargeConj Bu_SIGNAL       Bubar_SIGNAL
+#
+Alias      MyD0            D0
+Alias      MyAnti-D0       anti-D0
+ChargeConj MyD0            MyAnti-D0
+#
+Decay Bubar_SIGNAL
+  1.000    MyD0       K-           PHSP;
+Enddecay
+CDecay Bu_SIGNAL
+#
+Decay MyD0
+  1.000    K-         pi+          PHSP;
+Enddecay
+CDecay MyAnti-D0
+#
+End

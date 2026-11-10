@@ -1,0 +1,39 @@
+# EvtGen user decay file for k4DTF test samples
+#
+#   B0 -> D*(2010)- pi+,  D*- -> anti-D0 pi-,  anti-D0 -> K+ pi-   (+ c.c.)
+#
+# Decay descriptor (k4DTF / LHCb notation):
+#   B0 -> (D*(2010)- -> (D~0 -> K+ pi-) pi-) pi+
+#
+# Use with DelphesPythia8EvtGen_EDM4HEP_k4Interface ... 511 Bd_SIGNAL 1
+# Only the B chosen as signal follows this chain; all other hadrons decay
+# according to DECAY.DEC.
+
+Alias      Bd_SIGNAL       B0
+Alias      Bdbar_SIGNAL    anti-B0
+ChargeConj Bd_SIGNAL       Bdbar_SIGNAL
+#
+Alias      MyD*-           D*-
+Alias      MyD*+           D*+
+ChargeConj MyD*-           MyD*+
+#
+Alias      MyAnti-D0       anti-D0
+Alias      MyD0            D0
+ChargeConj MyAnti-D0       MyD0
+#
+Decay Bd_SIGNAL
+  1.000    MyD*-      pi+          SVS;
+Enddecay
+CDecay Bdbar_SIGNAL
+#
+Decay MyD*-
+  1.000    MyAnti-D0  pi-          VSS;
+Enddecay
+CDecay MyD*+
+#
+Decay MyAnti-D0
+  1.000    K+         pi-          PHSP;
+Enddecay
+CDecay MyD0
+#
+End

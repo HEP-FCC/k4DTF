@@ -22,7 +22,7 @@ for use inside [FCCAnalyses](https://github.com/HEP-FCC/FCCAnalyses).
   - [Core C++ library](#core-c-library)
   - [Gaudi / k4FWCore](#gaudi--k4fwcore)
   - [FCCAnalyses / RDataFrame](#fccanalyses--rdataframe)
-- [Implementing the algorithm](#implementing-the-algorithm)
+- [Algorithm](#algorithm)
 - [References](#references)
 - [Contributing](#contributing)
 - [Acknowledgements](#acknowledgements)
@@ -51,40 +51,43 @@ The fit output includes:
 ```
 k4DTF/
 ├── CMakeLists.txt                        # Top-level build
-├── cmake/
-│   └── k4DTFConfig.cmake.in             # Makes k4DTF find_package()-able
+├── cmake/k4DTFConfig.cmake.in            # Makes k4DTF find_package()-able
 │
-├── k4DTF/                               # Core library
+├── k4DTF/                                # Core library
 │   ├── include/k4DTF/
-│   │   ├── DTFParticle.h                # Internal particle (p4 + covariance + EDM4hep conversions)
-│   │   ├── DecayDescriptor.h            # Decay topology parser
-│   │   ├── FitResult.h                  # Fit output structure
-│   │   └── DecayTreeFitter.h            # Main fitter class
+│   │   ├── DecayTreeFitter.h             # Fitter (k4dtf namespace)
+│   │   ├── FitResult.h                   # chi2, status, per-node results
+│   │   ├── ErrCode.h, ChiSquare.h
+│   │   ├── core/DecayNodeInput.h         # Fitter input: tree of nodes
+│   │   ├── core/ParticleMeasurement.h    # Track (helix), photon, composite, ... measurements
+│   │   ├── core/Helix.h                  # Helix conventions and helpers
+│   │   ├── DecayDescriptor.h             # Descriptor parser (nested decays, pre-order nodes)
+│   │   ├── ParticleTable.h               # Particle names, PDG codes, masses, resonances
+│   │   ├── DTFParticle.h                 # Particle + track with ROOT/EDM4hep conversions
+│   │   └── TreeInput.h                   # Descriptor + particles -> DecayNodeInput
 │   └── src/
-│       ├── DTFParticle.cpp              # fromEDM4hep / toEDM4hep implementations
-│       ├── DecayDescriptor.cpp
-│       └── DecayTreeFitter.cpp          # ← implement the fit here
+│       ├── DecayTreeFitter.cpp           # Iteration, result extraction
+│       └── core/                         # Nodes, FitParams, KalmanCalculator, ...
 │
-├── k4DTFGaudi/                          # Gaudi plugin (requires k4FWCore)
-│   ├── include/k4DTFGaudi/
-│   │   └── DTFAlgorithm.h               # k4FWCore::MultiTransformer wrapper
-│   └── src/
-│       └── DTFAlgorithm.cpp
-│
-├── k4DTFFCCAnalyses/                    # FCCAnalyses / RDataFrame wrapper
+├── k4DTFGaudi/                           # Gaudi algorithm (k4FWCore::MultiTransformer)
+├── k4DTFFCCAnalyses/                     # FCCAnalyses / RDataFrame
 │   ├── include/k4DTFFCCAnalyses/
-│   │   ├── DTFFunctions.h               # RVec-returning free functions
-│   │   └── LinkDef.h                    # ROOT dictionary directives
+│   │   ├── DTFInput.h                    # Candidate building and MC truth matching
+│   │   ├── DTFFunctions.h                # DTFRunner, fit* extractors, DTF_* functions
+│   │   └── LinkDef.h
 │   └── src/
-│       └── DTFFunctions.cpp
 │
+├── tools/k4dtf_validate.cpp              # k4dtf-validate: fit + pulls on a stage-1 ntuple
 ├── examples/
-│   └── analysis_B0_to_Kpi.py           # FCCAnalyses analysis example
+│   ├── analysis_B0_to_Kpi.py
+│   └── dtf_test_samples/                 # Generation, FCCAnalyses stage 1, docs
 │
 └── test/
-    ├── CMakeLists.txt                   # Catch2 + CTest
-    ├── test_core.cpp                    # C++ unit tests
-    └── test_fccanalyses_pipeline.py     # RDataFrame pipeline test
+    ├── test_core.cpp                     # Parser, table, conversions, fitter API
+    ├── test_toy.cpp                      # Helix conventions; toy-MC pulls and chi2
+    ├── test_input.cpp                    # Candidate building, truth matching, DTFRunner
+    ├── ToyDecays.h, SyntheticEvent.h
+    └── test_fccanalyses_pipeline.py
 ```
 
 ---
@@ -204,201 +207,104 @@ ctest --test-dir build --output-on-failure -j$(nproc) -V
 
 ### Core C++ library
 
+The fitter takes the decay tree as a `k4dtf::DecayNodeInput` (one node per
+particle, measurements on the leaves) and an optional interaction point.
+From a decay descriptor and the measured final-state particles,
+`k4DTF::makeDecayNodeInput` builds it:
+
 ```cpp
 #include "k4DTF/DecayDescriptor.h"
 #include "k4DTF/DecayTreeFitter.h"
-#include "k4DTF/DTFParticle.h"
+#include "k4DTF/TreeInput.h"
 
-// Build the decay descriptor
-auto desc = k4DTF::DecayDescriptor::fromString("B0 -> K+ pi-");
+auto desc = k4DTF::DecayDescriptor::fromString("B- -> (D0 -> K- pi+) K-");
 
-// Configure the fitter
-k4DTF::DecayTreeFitter dtf(std::move(desc));
-dtf.addMassConstraint(511, 5.27963)   // B0 mass in GeV
-   .setMaxIterations(100)
-   .setConvergenceCriterion(1e-6);
+// one DTFParticle per leaf, in depth-first order: K-, pi+, K-
+// charged particles with their track (helix), e.g.
+//   k4DTF::DTFParticle::fromEDM4hep(recoParticle, trackState, Bz)
+std::vector<k4DTF::DTFParticle> leaves = {kaon1, pion, kaon2};
 
-// Provide measured final-state particles (order must match the descriptor)
-std::vector<k4DTF::DTFParticle> daughters = { kaon, pion };
+auto input = k4DTF::makeDecayNodeInput(desc, leaves, /*mass constraints*/ {421});
+k4dtf::InteractionPointInput pv = k4DTF::makeInteractionPoint(primaryVertex);
 
-k4DTF::FitResult result = dtf.fit(daughters);
+const k4dtf::DecayTreeFitter dtf;
+k4dtf::FitResult r = dtf.fit(input, pv);
 
-if (result.converged()) {
-    std::cout << "chi2 / ndf = " << result.chi2 << " / " << result.ndf << "\n";
-    std::cout << "fit prob   = " << result.prob() << "\n";
+if (r.converged()) {
+  std::cout << "chi2 / ndf = " << r.chi2 << " / " << r.ndf << ", prob " << r.prob() << "\n";
+  const auto& D0 = r.nodes[1];  // nodes in descriptor pre-order: B-, D0, K-, pi+, K-
+  std::cout << "D0 ctau = " << D0.ctau << " +- " << D0.ctauErr << " mm\n";
 }
 ```
 
-`DTFParticle` holds a `ROOT::Math::PxPyPzEVector` and a 10-element
-upper-triangle covariance over `(px, py, pz, E)`, matching the layout of
-`edm4hep::ReconstructedParticle::covMatrix`.
+- Descriptors may nest decays in parentheses and use LHCb, EvtGen or ROOT
+  particle names (`k4DTF::ParticleTable`).
+- Composites that decay strongly or electromagnetically (D*, J/psi, ...) are
+  resonances: no vertex or flight length of their own. Others get a decay
+  vertex and a flight length from their production vertex.
+- Tracks are helix measurements (`k4dtf::HelixMeasurement`, conventions in
+  `k4DTF/core/Helix.h`, which are those of k4SimDelphes `TrackState`s); their
+  mass hypothesis is the nominal mass of the descriptor's particle.
+- `FitResult::nodes` has, for every node: 4-momentum and covariance, mass and
+  error, decay vertex and covariance, flight length and c*tau with errors.
 
 ### Gaudi / k4FWCore
 
 `DTFAlgorithm` is a `k4FWCore::MultiTransformer` that reads an
-`edm4hep::ReconstructedParticleCollection` of final-state daughters and writes
-back a fitted `ReconstructedParticleCollection` and a `VertexCollection`.
-
-Python steering (Gaudi option file):
+`edm4hep::ReconstructedParticleCollection` with the final-state particles of
+one candidate (in the depth-first leaf order of the descriptor; charged
+particles with their tracks) and writes every fitted node of the tree (head
+first, with daughter relations) and one `Vertex` per decay vertex.
 
 ```python
 from Configurables import DTFAlgorithm
 
-dtf = DTFAlgorithm("B0DTF",
-    InputParticles   = ["B0Daughters"],
-    OutputParticles  = ["B0FittedDaughters"],
-    OutputVertices   = ["B0FittedVertices"],
-    DecayDescriptor  = "B0 -> K+ pi-",
-    MassConstraints  = {"511": 5.27963},   # PDG code (str) -> mass [GeV]
-    VertexConstraint = False,
-    MaxIterations    = 100,
-    ConvergenceEps   = 1e-6,
+dtf = DTFAlgorithm("BDTF",
+    InputParticles   = ["BDaughters"],
+    OutputParticles  = ["BFitted"],
+    OutputVertices   = ["BFittedVertices"],
+    DecayDescriptor  = "B- -> (D0 -> K- pi+) K-",
+    MassConstraints  = {"421": 0.0},   # PDG code (str) -> mass [GeV], <= 0: nominal
+    Bz               = 2.0,
 )
-
-ApplicationMgr().TopAlg += [dtf]
 ```
-
-The input collection must contain the final-state particles in the same order
-as the leaves of the decay descriptor.
 
 ### FCCAnalyses / RDataFrame
 
-Load the library in your analysis script and use the free functions as
-`RDataFrame::Define` expressions:
+[`examples/dtf_test_samples`](examples/dtf_test_samples/README.md) shows the
+full workflow: `k4DTF::CandidateBuilder` builds candidates from a descriptor,
+`k4DTF::TruthMatcher` matches every node to MC truth, `k4DTF::DTFRunner` fits
+them with their tracks and the primary vertex, and `k4DTF::fitNode*`
+functions extract per-node columns.
 
-```python
-import ROOT
-ROOT.gSystem.Load("libk4DTFFCCAnalyses")
-
-# Make k4DTF functions and edm4hep types visible to the ROOT JIT compiler
-ROOT.gInterpreter.Declare('#include "k4DTFFCCAnalyses/DTFFunctions.h"')
-ROOT.gInterpreter.Declare('#include "edm4hep/ReconstructedParticleData.h"')
-
-df = (
-    ROOT.RDataFrame("events", "input.root")
-    .Define("B0_DTF_chi2",
-            "k4DTF::DTF_chi2(B0_daughters, \"B0 -> K+ pi-\", 511, 5.27963f)")
-    .Define("B0_DTF_prob",
-            "k4DTF::DTF_prob(B0_daughters, \"B0 -> K+ pi-\", 511, 5.27963f)")
-    .Define("B0_DTF_mass",
-            "k4DTF::DTF_mass(B0_daughters, \"B0 -> K+ pi-\", 511, 5.27963f)")
-)
-```
-
-Or with a lambda to avoid repeating the descriptor string:
-
-```python
-df = df.Define("B0_DTF_chi2",
-    """[](const ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData>& v){
-        return k4DTF::DTF_chi2(v, "B0 -> K+ pi-", 511, 5.27963f);
-    }""",
-    ["B0_daughters"])
-```
-
-Available functions (all in namespace `k4DTF`):
-
-| Function | Return type | Description |
-|---|---|---|
-| `DTF_chi2` | `RVec<float>` | chi-square of the fit |
-| `DTF_prob` | `RVec<float>` | chi-square probability (`TMath::Prob`) |
-| `DTF_mass` | `RVec<float>` | fitted invariant mass of the mother |
-| `DTF_fittedParticles` | `RVec<ReconstructedParticleData>` | all fitted particles |
-| `DTF_chi2_single` | `float` | convenience wrapper for a single candidate |
-
-All functions return `-1` (or an empty vector) when the fit does not converge.
+The earlier one-call functions `DTF_chi2`, `DTF_prob`, `DTF_mass`,
+`DTF_fittedParticles` and `DTF_chi2_single` remain; they fit momenta only
+(no tracks), from the 4-momentum covariance of the particles, which Delphes
+leaves empty.
 
 ---
 
-## Implementing the algorithm
+## Algorithm
 
-The repository is a skeleton.  All interfaces, build system, tests, and
-framework wrappers are in place; the actual math in
-`k4DTF/src/DecayTreeFitter.cpp` is left as stubs.  The four functions to fill
-in, in order, are:
+The implementation follows the BaBar/LHCb DecayTreeFitter (Hulsbergen 2005):
+all parameters of the tree (vertex positions, flight lengths, momenta) are
+fitted at once, by applying the constraints one after the other as Kalman
+filter steps, iterated until the chi2 is stable.
 
-### 1. `initialiseState()`
+| Node | Parameters | Constraints |
+|---|---|---|
+| Interaction point (optional) | position | measured position |
+| Composite with lifetime | decay vertex, flight length, (px, py, pz, E) | 4-momentum conservation; flight direction along p from the production vertex; optional mass |
+| Resonance | (px, py, pz, E) | 4-momentum conservation; optional mass |
+| Track | (px, py, pz) | helix at the mother's vertex = measured helix (5) |
 
-Build the state vector `state.x` (and its copy `state.x0`) from the measured
-four-momenta of the input `DTFParticle` array, and fill `state.C` (and
-`state.C0`) from the corresponding covariance matrices.
+Each iteration linearises all constraints at the result of the previous one,
+starting from an inflated diagonal of the previous covariance as weak prior.
+The covariance update uses the Joseph form for numerical stability.
 
-Each particle contributes four parameters `(px, py, pz, E)`, so for `n`
-daughters the state vector has `4n` elements.  The 10-element upper-triangle
-covariance of each particle maps to a `4×4` block on the diagonal of the full
-covariance matrix (the cross-particle covariances are zero at input).
-
-The EDM4hep upper-triangle index convention for `(px, py, pz, E)` is:
-
-```
-cov[0]  = σ²(px,px)
-cov[1]  = σ(px,py)   cov[2]  = σ²(py,py)
-cov[3]  = σ(px,pz)   cov[4]  = σ(py,pz)   cov[5]  = σ²(pz,pz)
-cov[6]  = σ(px,E)    cov[7]  = σ(py,E)    cov[8]  = σ(pz,E)    cov[9]  = σ²(E,E)
-```
-
-### 2. `buildConstraints()`
-
-Populate the constraint vector `state.h` and the Jacobian `state.H`
-(`∂h/∂x`) for the current value of `state.x`.
-
-**Four-momentum conservation** at a decay node with daughters `i` and `j`
-gives four constraints:
-
-```
-h_μ = Σ_daughters p_μ^daughter - p_μ^mother = 0
-```
-
-Because the mother four-momentum is the sum of the daughters, this reduces to
-a linear constraint — `H` has `+1` entries at the daughter columns and `-1`
-(or `0`) at the mother column if the mother is also a free parameter.
-
-**Mass constraint** on a node (PDG code `pdg`, target mass `m`) adds one
-constraint:
-
-```
-h = (Σ p_μ)^2 - m^2 = E² - |p|² - m² = 0
-```
-
-The Jacobian row for this constraint is `∂h/∂p_μ = 2(Σ p_μ)` evaluated at
-the current `state.x`.
-
-Vertex constraints (production vertex position) are optional and require
-track helix parameters; see the `setVertexConstraint()` method.
-
-### 3. `iterate()`
-
-Apply one Newton step of the Lagrange-multiplier update (Moser & Roussarie
-eq. 14):
-
-```
-W      = H C H^T          (constraint covariance, size n_c × n_c)
-lambda = W^{-1} (h + H (x - x0))
-x_new  = x0 - C H^T lambda
-chi2   = lambda^T W lambda
-```
-
-`W` is inverted with `TMatrixD::Invert()`.  After each step, call
-`buildConstraints()` again with the updated `state.x` and check
-`|Δchi2| < m_convergenceEps` for convergence.
-
-### 4. `extractResult()`
-
-Unpack `state.x` back into `FitResult::fittedParticles`: create one
-`DTFParticle` per input daughter, copy the fitted `(px, py, pz, E)` from the
-state vector, and copy the updated covariance from the diagonal block of
-`state.C`.
-
-Set `result.chi2`, `result.ndf` (number of constraints minus number of free
-parameters), `result.nIter`, and `result.status = FitResult::Status::Success`.
-
-### Where to look
-
-| File | What to change |
-|---|---|
-| `k4DTF/src/DecayTreeFitter.cpp` | The four stub functions above |
-| `k4DTF/include/k4DTF/FitResult.h` | `prob()` stub — replace `return 0.0` with `TMath::Prob(chi2, ndf)` |
-| `test/test_core.cpp` | Tighten the fitter tests once results are non-trivial |
-| `test/test_fccanalyses_pipeline.py` | Replace the loose `is not None` assertions with numerical checks |
+`test/test_toy.cpp` validates the fit with a toy MC (B- -> D0 K-,
+B0 -> D*- pi+): pulls of momenta, vertices and c*tau are unit Gaussians and
+<chi2> = ndf.
 
 ---
 

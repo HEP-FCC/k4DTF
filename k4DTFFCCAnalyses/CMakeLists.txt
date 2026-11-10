@@ -7,6 +7,7 @@ root_generate_dictionary(G__k4DTFFCCAnalyses
 
 add_library(k4DTFFCCAnalyses SHARED
   src/DTFFunctions.cpp
+  src/DTFInput.cpp
   ${CMAKE_CURRENT_BINARY_DIR}/G__k4DTFFCCAnalyses.cxx
 )
 
