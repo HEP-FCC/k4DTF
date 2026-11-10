@@ -1,14 +1,6 @@
-# Generate ROOT dictionary for use in CLING / RDataFrame
-root_generate_dictionary(G__k4DTFFCCAnalyses
-  ${CMAKE_CURRENT_SOURCE_DIR}/include/k4DTFFCCAnalyses/DTFFunctions.h
-  LINKDEF ${CMAKE_CURRENT_SOURCE_DIR}/include/k4DTFFCCAnalyses/LinkDef.h
-  MODULE k4DTFFCCAnalyses
-)
-
 add_library(k4DTFFCCAnalyses SHARED
   src/DTFFunctions.cpp
   src/DTFInput.cpp
-  ${CMAKE_CURRENT_BINARY_DIR}/G__k4DTFFCCAnalyses.cxx
 )
 
 add_library(k4DTF::k4DTFFCCAnalyses ALIAS k4DTFFCCAnalyses)
@@ -26,6 +18,16 @@ target_link_libraries(k4DTFFCCAnalyses
     ROOT::ROOTVecOps
     ROOT::Core
     ROOT::Physics
+)
+
+# Generate the ROOT dictionary for use in CLING / RDataFrame. The target must
+# exist first: with MODULE, rootcling gets the target's include directories,
+# including those of k4DTF::k4DTF and Eigen, which DTFFunctions.h needs. The
+# generated source is added to the target.
+root_generate_dictionary(G__k4DTFFCCAnalyses
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/k4DTFFCCAnalyses/DTFFunctions.h
+  LINKDEF ${CMAKE_CURRENT_SOURCE_DIR}/include/k4DTFFCCAnalyses/LinkDef.h
+  MODULE k4DTFFCCAnalyses
 )
 
 set_target_properties(k4DTFFCCAnalyses PROPERTIES
