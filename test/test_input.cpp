@@ -54,6 +54,9 @@ Prepared makeEvent(bool cc, bool mixed) {
   return p;
 }
 
+/// RVec == RVec is element-wise (returns an RVec); compare as std::vector.
+std::vector<int> asVector(const Vec_i& v) { return {v.begin(), v.end()}; }
+
 int signalIndex(const TruthMatch& t) {
   for (std::size_t j = 0; j < t.isSignal.size(); ++j)
     if (t.isSignal[j]) return static_cast<int>(j);
@@ -86,10 +89,10 @@ TEST_CASE("CandidateBuilder finds the signal chain and TruthMatcher flags it", "
   const int j = signalIndex(truth);
   REQUIRE(j >= 0);
   CHECK(cands.isCC[j] == 0);
-  CHECK(cands.leaves[j] == Vec_i{p.recoOf[p.chain.K], p.recoOf[p.chain.piD0], p.recoOf[p.chain.piSoft],
+  CHECK(asVector(cands.leaves[j]) == std::vector<int>{p.recoOf[p.chain.K], p.recoOf[p.chain.piD0], p.recoOf[p.chain.piSoft],
                                  p.recoOf[p.chain.piB]});
-  CHECK(truth.nodeMC[j] ==
-        Vec_i{p.chain.B, p.chain.Dst, p.chain.D0, p.chain.K, p.chain.piD0, p.chain.piSoft, p.chain.piB});
+  CHECK(asVector(truth.nodeMC[j]) ==
+        std::vector<int>{p.chain.B, p.chain.Dst, p.chain.D0, p.chain.K, p.chain.piD0, p.chain.piSoft, p.chain.piB});
   CHECK(truth.headOrigin[j] == p.chain.B);
 
   // pre-fit masses with the descriptor's mass hypotheses
