@@ -6,7 +6,8 @@ if(NOT Catch2_FOUND)
 else()
   include(Catch)
 
-  add_executable(test_k4DTF test_core.cpp)
+  add_executable(test_k4DTF test_core.cpp test_toy.cpp)
+  target_include_directories(test_k4DTF PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
   target_link_libraries(test_k4DTF
     PRIVATE
       k4DTF::k4DTF

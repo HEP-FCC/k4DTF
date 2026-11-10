@@ -14,6 +14,7 @@ add_library(k4DTF SHARED
   src/core/MergedPi0Node.cpp
   src/core/InteractionPointNode.cpp
   src/core/DecayChain.cpp
+  src/core/Helix.cpp
 )
 
 add_library(k4DTF::k4DTF ALIAS k4DTF)

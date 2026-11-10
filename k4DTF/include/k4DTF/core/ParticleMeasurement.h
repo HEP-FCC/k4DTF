@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <optional>
 #include <variant>
 #include <vector>
 
@@ -10,10 +11,25 @@
 
 namespace k4dtf {
 
+/// Helix parameters with covariance, see k4DTF/core/Helix.h for the conventions.
+struct HelixMeasurement {
+  Eigen::Matrix<double, 5, 1> par;
+  Eigen::Matrix<double, 5, 5> cov;
+  Eigen::Vector3d referencePoint{Eigen::Vector3d::Zero()};  ///< [mm]
+  double Bz{0};                                             ///< [T]
+};
+
+/// A charged track.
+///
+/// With a helix the track constrains both the position of its production
+/// vertex and its momentum (5 constraints); this is what a decay-tree fit with
+/// vertices needs. Without a helix only the 3-momentum is used, and no vertex
+/// position can be determined from this track.
 struct TrackMeasurement {
-  Eigen::Vector3d momentum;
-  Eigen::Matrix3d cov;
+  Eigen::Vector3d momentum;  ///< used if there is no helix
+  Eigen::Matrix3d cov;       ///< used if there is no helix
   double charge{0};
+  std::optional<HelixMeasurement> helix;
 };
 
 struct PhotonMeasurement {
