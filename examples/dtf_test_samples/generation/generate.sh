@@ -51,14 +51,16 @@ fetch() {  # fetch <path inside FCC-config/FCCee>
       "https://raw.githubusercontent.com/HEP-FCC/FCC-config/main/FCCee/${rel}"
   fi
 }
-fetch Delphes/card_IDEA.tcl
+#fetch Delphes/card_IDEA.tcl
+cp "${HERE}/card_IDEA.tcl" "${WORK}"
 fetch Delphes/edm4hep_IDEA.tcl
 fetch Generator/EvtGen/DECAY.DEC
 fetch Generator/EvtGen/evt.pdl
 cp "${HERE}/${DECFILE}" "${WORK}/"
 
 CARD="${WORK}/p8_ee_Zbb_ecm91_EvtGen_${MODE}.cmd"
-cp "${HERE}/p8_ee_Zbb_ecm91_EvtGen_DTF.cmd" "${CARD}"
+#cp "${HERE}/p8_ee_Zbb_ecm91_EvtGen_DTF.cmd" "${CARD}"
+cp "${HERE}/p8_ee_Zbb_ecm91_EvtGen_k4Interface.cmd" "${CARD}"
 {
   echo ""
   echo "! added by generate.sh"

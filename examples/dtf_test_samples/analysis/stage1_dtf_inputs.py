@@ -168,7 +168,7 @@ class Analysis():
             ('PV_tracks', 'FCCAnalyses::VertexFitterSimple::get_PrimaryTracks('
                           f'k4dtf_trackStates, true, {bsx}, {bsy}, {bsz}, 0., 0., 0.)', False),
             ('PV_object', 'FCCAnalyses::VertexFitterSimple::VertexFitter_Tk('
-                          f'1, PV_tracks, true, {bsx}, {bsy}, {bsz}, 0., 0., 0., false)', False),
+                          f'1, PV_tracks, true, {bsx}, {bsy}, {bsz}, 0., 0., 0.)', False),
             ('PV_reco', 'FCCAnalyses::VertexingUtils::get_VertexData(PV_object)', True),
             ('PV_nTracks', 'PV_object.ntracks', True),
         ]
