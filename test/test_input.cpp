@@ -171,6 +171,44 @@ TEST_CASE("Mixed B0: head origin is the produced particle", "[input]") {
   CHECK_THAT(nodeTrueCtau(truth, p.ev.mc, p.ev.mcDaughters, 0)[j], WithinAbs(0.455, 1e-9));
 }
 
+TEST_CASE("Signal-only candidates: particles from the head, then truth-matched candidates", "[input]") {
+  for (const bool mixed : {false, true}) {
+    const auto p = makeEvent(false, mixed);
+    const CandidateBuilder b(kBd, kWindows);
+    const TruthMatcher matcher(b);
+
+    // background tracks lose their PID, the signal tracks keep it
+    const auto pidSig = signalPID(p.pid, p.recoMC, p.ev.mc, p.ev.mcParents, 511);
+    for (int m : {p.chain.K, p.chain.piD0, p.chain.piSoft, p.chain.piB}) CHECK(pidSig[p.recoOf[m]] == p.pid[p.recoOf[m]]);
+    const int nKept = static_cast<int>(std::count_if(pidSig.begin(), pidSig.end(), [](int x) { return x != 0; }));
+    CHECK(nKept == 4);
+    // the sign of the head PDG does not matter
+    CHECK(asVector(signalPID(p.pid, p.recoMC, p.ev.mc, p.ev.mcParents, -511)) == asVector(pidSig));
+    // nothing comes from a B+
+    const auto none = signalPID(p.pid, p.recoMC, p.ev.mc, p.ev.mcParents, 521);
+    CHECK(std::count(none.begin(), none.end(), 0) == static_cast<long>(none.size()));
+
+    const auto all = b(p.ev.recos, p.pid);
+    const auto allTruth = matcher(all, p.recoMC, p.ev.mc, p.ev.mcParents, p.ev.mcDaughters);
+    const auto fromHead = b(p.ev.recos, pidSig);
+    CHECK(nCandidates(fromHead) <= nCandidates(all));
+    const auto fromHeadTruth = matcher(fromHead, p.recoMC, p.ev.mc, p.ev.mcParents, p.ev.mcDaughters);
+    const auto sig = selectCandidates(fromHead, fromHeadTruth.isSignal);
+    const auto sigTruth = selectCandidates(fromHeadTruth, fromHeadTruth.isSignal);
+
+    // the same signal candidate as from all particles
+    REQUIRE(nCandidates(sig) == 1);
+    REQUIRE(sigTruth.isSignal.size() == 1);
+    CHECK(sigTruth.isSignal[0] == 1);
+    const int j = signalIndex(allTruth);
+    REQUIRE(j >= 0);
+    CHECK(asVector(sig.leaves[0]) == asVector(all.leaves[j]));
+    CHECK(sig.isCC[0] == all.isCC[j]);
+    CHECK(asVector(sigTruth.nodeMC[0]) == asVector(allTruth.nodeMC[j]));
+    CHECK(sigTruth.headOrigin[0] == allTruth.headOrigin[j]);
+  }
+}
+
 TEST_CASE("Mass windows and identical siblings", "[input]") {
   const auto p = makeEvent(false, false);
   // a D0 window that excludes the D0 removes the signal

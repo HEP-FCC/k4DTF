@@ -47,6 +47,16 @@ Every generated event contains one signal B; the other b hadron decays
 generically, so the samples also contain combinatorial background candidates.
 Fit columns are `-999` for fits that did not converge.
 
+**Signal only.** For high-multiplicity modes, building and fitting every
+candidate is slow. Add `--signal-only` after `--` in step 2 to fit only the
+truth-matched candidates. Candidates are then built only from reconstructed
+particles whose MC particle comes from a decay of the head particle (any
+charge, so mixed B0 count), which removes most of the combinatorics up front.
+Only candidates where every node is matched are kept. The ntuple then has no
+background candidates (`nCand` counts the signal ones), so use it for
+resolutions and pulls, not efficiencies. The primary-vertex fit still uses all
+tracks.
+
 ## Stage-1 ntuple (`events` tree)
 
 One entry per event with at least one candidate (`--keep-empty` keeps all).

@@ -74,6 +74,14 @@ Vec_ts trackStatePerReco(const Vec_rp& recos, const Vec_i& rpTrackIdx, const Vec
 /// First element of a one-entry column such as magFieldBz, or def if empty.
 float firstOr(const Vec_f& v, float def);
 
+/// pid with 0 for every reconstructed particle that does not come from a
+/// decay of a particle with |PDG| = |headPdg| (its MC particle has no such
+/// ancestor, or it is not linked). Passed to CandidateBuilder, this keeps
+/// only particles that can be part of a signal candidate, which avoids most
+/// of the combinatorics in busy events; select the truth-matched candidates
+/// afterwards with selectCandidates(..., TruthMatch::isSignal).
+Vec_i signalPID(const Vec_i& pid, const Vec_i& recoMC, const Vec_mc& mc, const Vec_i& mcParents, int headPdg);
+
 // ---------------------------------------------------------------------------
 // Candidates
 // ---------------------------------------------------------------------------
@@ -117,6 +125,9 @@ private:
 
 /// Number of candidates.
 int nCandidates(const Candidates& c);
+
+/// Candidates j with mask[j] != 0, e.g. mask = TruthMatch::isSignal.
+Candidates selectCandidates(const Candidates& c, const Vec_i& mask);
 
 /// Reco index of leaf `leaf` for every candidate.
 Vec_i leafRecoIndex(const Candidates& c, int leaf);
@@ -168,6 +179,10 @@ private:
   DecayDescriptor m_desc;
   DecayDescriptor m_cc;
 };
+
+/// Truth of the candidates j with mask[j] != 0 (same order as
+/// selectCandidates(c, mask)).
+TruthMatch selectCandidates(const TruthMatch& t, const Vec_i& mask);
 
 /// Matched MC particle of node `node` for every candidate (default-constructed,
 /// PDG 0, if not matched). For the head this is the decaying particle.

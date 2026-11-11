@@ -108,6 +108,47 @@ Vec_ts trackStatePerReco(const Vec_rp& recos, const Vec_i& rpTrackIdx, const Vec
 
 float firstOr(const Vec_f& v, float def) { return v.empty() ? def : v[0]; }
 
+Vec_i signalPID(const Vec_i& pid, const Vec_i& recoMC, const Vec_mc& mc, const Vec_i& mcParents, int headPdg) {
+  const int nMC = static_cast<int>(mc.size());
+  const int head = std::abs(headPdg);
+  // per MC particle: -1 unknown, 0 no, 1 descends from a head particle
+  std::vector<signed char> fromHead(nMC, -1);
+  std::vector<int> stack;
+  // Search through the ancestors of `start`. If none is a head particle, none
+  // of the ancestors visited has one either, which is remembered.
+  auto descends = [&](int start) {
+    std::vector<int> visited;
+    stack.assign(1, start);
+    bool found = false;
+    while (!stack.empty() && !found) {
+      const int i = stack.back();
+      stack.pop_back();
+      if (i < 0 || i >= nMC) continue;
+      if (fromHead[i] >= 0) {
+        found = fromHead[i] == 1;
+        continue;
+      }
+      fromHead[i] = 0;  // marks it visited (protects against loops)
+      visited.push_back(i);
+      forEachRelated(mcParents, mc[i].parents_begin, mc[i].parents_end, [&](int q) {
+        if (q >= 0 && q < nMC && std::abs(mc[q].PDG) == head) found = true;
+        stack.push_back(q);
+      });
+    }
+    // if found, only `start` is known to descend from a head: the search
+    // stopped early, and other particles visited may not be on that path
+    for (int i : visited) fromHead[i] = found ? (i == start ? 1 : -1) : 0;
+    return found;
+  };
+
+  Vec_i out(pid.size(), 0);
+  for (std::size_t i = 0; i < pid.size() && i < recoMC.size(); ++i) {
+    const int m = recoMC[i];
+    if (m >= 0 && m < nMC && descends(m)) out[i] = pid[i];
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Candidates
 // ---------------------------------------------------------------------------
@@ -193,6 +234,16 @@ Candidates CandidateBuilder::operator()(const Vec_rp& recos, const Vec_i& pid) c
 }
 
 int nCandidates(const Candidates& c) { return static_cast<int>(c.leaves.size()); }
+
+Candidates selectCandidates(const Candidates& c, const Vec_i& mask) {
+  Candidates out;
+  for (std::size_t j = 0; j < c.leaves.size() && j < mask.size(); ++j) {
+    if (!mask[j]) continue;
+    out.leaves.push_back(c.leaves[j]);
+    out.isCC.push_back(c.isCC[j]);
+  }
+  return out;
+}
 
 Vec_i leafRecoIndex(const Candidates& c, int leaf) {
   Vec_i out;
@@ -322,6 +373,18 @@ TruthMatch TruthMatcher::operator()(const Candidates& c, const Vec_i& recoMC, co
     t.headOrigin.push_back(origin);
   }
   return t;
+}
+
+TruthMatch selectCandidates(const TruthMatch& t, const Vec_i& mask) {
+  TruthMatch out;
+  for (std::size_t j = 0; j < t.nodeMC.size() && j < mask.size(); ++j) {
+    if (!mask[j]) continue;
+    out.nodeMC.push_back(t.nodeMC[j]);
+    out.isSignal.push_back(t.isSignal[j]);
+    out.nMatched.push_back(t.nMatched[j]);
+    out.headOrigin.push_back(t.headOrigin[j]);
+  }
+  return out;
 }
 
 Vec_mc nodeMCParticle(const TruthMatch& t, const Vec_mc& mc, int node) {

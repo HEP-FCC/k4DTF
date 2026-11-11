@@ -16,7 +16,14 @@ Run (after building k4DTF and calling k4_local_repo in its source tree):
         -i p8_ee_Zbb_ecm91_EvtGen_Bd2DstPi_seed1.root \\
         -o dtf_inputs_Bd2DstPi.root -- --mode Bd2DstPi
 
-Extra options after "--": --mode, --max-candidates, --no-cc, --keep-empty.
+Extra options after "--": --mode, --max-candidates, --no-cc, --keep-empty,
+--signal-only.
+
+With --signal-only, candidates are built only from reconstructed particles
+that come from a decay of the head particle (by MC truth), and only fully
+truth-matched candidates are kept and fitted. This is much faster for
+high-multiplicity modes, but gives no background candidates: use it for
+resolution and pull studies, not for efficiencies or background.
 '''
 
 from argparse import ArgumentParser
@@ -129,6 +136,9 @@ class Analysis():
                             help='Do not build the charge-conjugate mode')
         parser.add_argument('--keep-empty', action='store_true',
                             help='Keep events without candidates')
+        parser.add_argument('--signal-only', action='store_true',
+                            help='Build candidates only from particles of the signal decay (MC truth) '
+                                 'and keep only truth-matched candidates; much faster, no background')
         self.ana_args, _ = parser.parse_known_args(cmdline_args.get('remaining', []))
 
         self.cfg = MODES[self.ana_args.mode]
@@ -136,6 +146,7 @@ class Analysis():
         self.ns = declare_config(self.ana_args.mode, self.cfg, self.ana_args.max_candidates,
                                  not self.ana_args.no_cc)
         self.nodes = describe_nodes(self.cfg)
+        self.head_pdg = int(ROOT.k4DTF.DecayDescriptor.fromString(self.cfg['descriptor']).flatten()[0].pdg)
 
     def _plan(self, bz_expr='2.0f'):
         '''Ordered list of (column, expression, written to output).
@@ -153,14 +164,31 @@ class Analysis():
             ('RP_pid', 'k4DTF::truthPDG(RP_mcIdx, Particle)', False),
             ('RP_ts', 'k4DTF::trackStatePerReco(ReconstructedParticles, k4dtf_rpTracks, EFlowTrack, '
                       'k4dtf_trackStates)', False),
-            # candidates and truth matching
-            ('cands', f'{ns}::builder(ReconstructedParticles, RP_pid)', False),
-            ('nCand', 'k4DTF::nCandidates(cands)', True),
         ]
-        if not self.ana_args.keep_empty:
-            plan.append(('FILTER', 'nCand > 0', False))
+        # candidates and truth matching
+        matcher = f'{ns}::matcher({{}}, RP_mcIdx, Particle, k4dtf_mcParents, k4dtf_mcDaughters)'
+        if self.ana_args.signal_only:
+            # Only particles from a decay of the head particle enter the
+            # combinatorics; of their combinations only the truth-matched
+            # ones are kept (and fitted).
+            plan += [
+                ('RP_pidSignal', f'k4DTF::signalPID(RP_pid, RP_mcIdx, Particle, k4dtf_mcParents, '
+                                 f'{self.head_pdg})', False),
+                ('cands_built', f'{ns}::builder(ReconstructedParticles, RP_pidSignal)', False),
+                ('truth_built', matcher.format('cands_built'), False),
+                ('cands', 'k4DTF::selectCandidates(cands_built, truth_built.isSignal)', False),
+                ('truth', 'k4DTF::selectCandidates(truth_built, truth_built.isSignal)', False),
+                ('nCand', 'k4DTF::nCandidates(cands)', True),
+            ]
+            if not self.ana_args.keep_empty:
+                plan.append(('FILTER', 'nCand > 0', False))
+        else:
+            plan.append(('cands', f'{ns}::builder(ReconstructedParticles, RP_pid)', False))
+            plan.append(('nCand', 'k4DTF::nCandidates(cands)', True))
+            if not self.ana_args.keep_empty:
+                plan.append(('FILTER', 'nCand > 0', False))
+            plan.append(('truth', matcher.format('cands'), False))
         plan += [
-            ('truth', f'{ns}::matcher(cands, RP_mcIdx, Particle, k4dtf_mcParents, k4dtf_mcDaughters)', False),
             ('cand_isCC', 'cands.isCC', True),
             ('cand_isSignal', 'truth.isSignal', True),
             ('cand_nMatched', 'truth.nMatched', True),
