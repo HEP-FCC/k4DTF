@@ -16,11 +16,8 @@ Decay modes (each with its charge conjugate):
 | `Bd2DstPi` | `B0 -> (D*(2010)- -> (D~0 -> K+ pi-) pi-) pi+` | `B Dst D0 D0_K D0_pi Dst_pi B_pi` |
 | `Bu2D0K_D02KPi` | `B- -> (D0 -> K- pi+) K-` | `B D0 D0_K D0_pi B_K` |
 | `Bu2D0K_D02KSPiPi` | `B- -> (D0 -> (KS0 -> pi+ pi-) pi+) K-` | `B D0 KS KS_pip KS_pim D0_pip D0_pim B_K` |
-| `Bu2D0Pi_KPiPi0` | `B- -> (D0 -> K- pi+ (pi0 -> gamma gamma)) pi-` | `B D0 D0_K D0_pi D0_pi0 pi0_g1 pi0_g2 B_pi` |
-
-`Bd2DstPi` has three levels: a displaced B, a D* resonance decaying at the B
-vertex (with a soft pion), and a displaced D0. `Bu2D0K_D02KPi` is the simplest
-two-vertex chain. `Bu2D0K_D02KSPiPi` includes long-lived particle (KS). `Bu2D0Pi_KPiPi0` has a resolved pi0: two photon clusters that point back to the D0 vertex, with the pi0 mass constrained in `DTFPV`.
+| `Bu2D0Pi_D02KPiPi0` | `B- -> (D0 -> K- pi+ (pi0 -> gamma gamma)) pi-` | `B D0 D0_K D0_pi D0_pi0 pi0_g1 pi0_g2 B_pi` |
+| `Bd2D0Pi0_D02KK` | `B0 -> (D~0 -> K- K+) (pi0 -> gamma gamma) ` | `B D0 D0_Km D0_Kp D0_pi0 pi0_g1 pi0_g2` |
 
 ## Quick start
 
