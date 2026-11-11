@@ -17,7 +17,7 @@ Run (after building k4DTF and calling k4_local_repo in its source tree):
         -o dtf_inputs_Bd2DstPi.root -- --mode Bd2DstPi
 
 Extra options after "--": --mode, --max-candidates, --no-cc, --keep-empty,
---signal-only.
+--signal-only, --photon-errors
 
 With --signal-only, candidates are built only from reconstructed particles
 that come from a decay of the head particle (by MC truth), and only fully
@@ -62,7 +62,29 @@ MODES = {
         'fits': {'DTF': ([], False), 'DTFPV': ([421,310], True)},
         'derived': {},
     },
+    'Bu2D0Pi_KPiPi0': {
+        'descriptor': 'B- -> (D0 -> K- pi+ (pi0 -> gamma gamma)) pi-',
+        'labels': ['B', 'D0', 'KD0', 'piD0', 'pi0', 'g1', 'g2', 'piB'],
+        'mass_windows': {521: (4.8, 5.8), 421: (1.70, 2.00), 111: (0.09, 0.18)},
+        'fits': {'DTF': ([], False), 'DTFPV': ([421, 111], True)},
+        'derived': {},
+    },
 }
+
+# Photon resolution for clusters written without errors (k4SimDelphes before
+# v00-09) or without a position: k4DTF::CalorimeterResolution. The defaults
+# match the Delphes IDEA card (crystal ECAL, 0.02 x 0.02 towers with
+# SmearTowerCenter, front face at R = 2250 mm, |z| = 2500 mm); change them
+# here for another card.
+CALORIMETER = {
+    'towerSize': 0.02,
+    'smearTowerCenter': True,
+    'stochastic': 0.03,
+    'noise': 0.002,
+    'constant': 0.005,
+    'radius': 2250.,
+    'halfLength': 2500.,
+ }
 
 # Luminous region [um] for the primary-vertex fit; must match the Pythia card.
 BEAMSPOT_UM = (4.5, 20e-3, 300.)
@@ -79,7 +101,11 @@ COLUMNS = {
     'k4dtf_rpTracks': ['_ReconstructedParticles_tracks.index', 'ReconstructedParticles#1.index'],
     'k4dtf_trackStates': ['_EFlowTrack_trackStates', 'EFlowTrack_1'],
 }
-
+# Only needed for modes with photons.
+PHOTON_COLUMNS = {
+    'k4dtf_rpClusters': ['_ReconstructedParticles_clusters.index', 'ReconstructedParticles#0.index'],
+    'k4dtf_photonClusters': ['EFlowPhoton'],
+}
 
 def load_k4dtf():
     '''Load the k4DTF FCCAnalyses library and its headers (once).'''
@@ -105,10 +131,17 @@ def declare_config(mode, cfg, max_candidates, include_cc):
         f'const k4DTF::DTFRunner fit_{name}(builder, {{{", ".join(map(str, pdgs))}}}, '
         f'{"true" if pv else "false"});'
         for name, (pdgs, pv) in cfg['fits'].items())
+    calo = '\n'.join(f'  c.{k} = {str(v).lower() if isinstance(v, bool) else v};'
+                     for k, v in CALORIMETER.items())    
     ROOT.gInterpreter.Declare(f'''
 #ifndef K4DTF_CFG_{mode.upper()}
 #define K4DTF_CFG_{mode.upper()}
 namespace {ns} {{
+const k4DTF::CalorimeterResolution calo = [] {{
+  k4DTF::CalorimeterResolution c;
+{calo}
+  return c;
+}}();
 const k4DTF::CandidateBuilder builder("{cfg["descriptor"]}", {cpp_windows(cfg["mass_windows"])},
                                       {"true" if include_cc else "false"}, {max_candidates});
 const k4DTF::TruthMatcher matcher(builder);
@@ -143,6 +176,9 @@ class Analysis():
                             help='Do not build the charge-conjugate mode')
         parser.add_argument('--keep-empty', action='store_true',
                             help='Keep events without candidates')
+        parser.add_argument('--photon-errors', default='file', choices=['file', 'model'],
+                            help='Photon position/energy errors from the file when it has them (default), '
+                                 'or always from CALORIMETER')        
         parser.add_argument('--signal-only', action='store_true',
                             help='Build candidates only from particles of the signal decay (MC truth) '
                                  'and keep only truth-matched candidates; much faster, no background')
@@ -153,7 +189,11 @@ class Analysis():
         self.ns = declare_config(self.ana_args.mode, self.cfg, self.ana_args.max_candidates,
                                  not self.ana_args.no_cc)
         self.nodes = describe_nodes(self.cfg)
-        self.head_pdg = int(ROOT.k4DTF.DecayDescriptor.fromString(self.cfg['descriptor']).flatten()[0].pdg)
+        flat = ROOT.k4DTF.DecayDescriptor.fromString(self.cfg['descriptor']).flatten()
+        self.pdgs = [abs(int(flat[n].pdg)) for n in range(flat.size())]
+        self.head_pdg = int(flat[0].pdg)
+        self.has_photons = any(self.pdgs[n] == 22 for _, n, leaf in self.nodes if leaf >= 0)        
+
 
     def _plan(self, bz_expr='2.0f'):
         '''Ordered list of (column, expression, written to output).
@@ -172,6 +212,12 @@ class Analysis():
             ('RP_ts', 'k4DTF::trackStatePerReco(ReconstructedParticles, k4dtf_rpTracks, EFlowTrack, '
                       'k4dtf_trackStates)', False),
         ]
+        if self.has_photons:
+            # photon clusters with position and errors, filled in from the
+            # calorimeter model where the file has none
+            plan.append(('RP_cluster', 'k4DTF::photonClusterPerReco(ReconstructedParticles, k4dtf_rpClusters, '
+                                       f'k4dtf_photonClusters, {ns}::calo, '
+                                       f'{"true" if self.ana_args.photon_errors == "model" else "false"})', False))        
         # candidates and truth matching
         matcher = f'{ns}::matcher({{}}, RP_mcIdx, Particle, k4dtf_mcParents, k4dtf_mcDaughters)'
         if self.ana_args.signal_only:
@@ -223,6 +269,8 @@ class Analysis():
                     (f'{label}_trueTrack', f'k4DTF::leafTrueTrackState(truth, Particle, {ns}::builder, '
                                            f'{leaf}, Bz)', True),
                 ]
+                if self.has_photons and self.pdgs[node] == 22:
+                    plan.append((f'{label}_cluster', f'k4DTF::leafClusters(cands, RP_cluster, {leaf})', True))                
             else:
                 plan += [
                     (f'{label}_M', f'k4DTF::nodeMass(cands, ReconstructedParticles, {ns}::builder, {node})',
@@ -242,7 +290,9 @@ class Analysis():
         # decay-tree fits
         for fit in cfg['fits']:
             fits = f'{fit}_fits'
-            plan.append((fits, f'{ns}::fit_{fit}(cands, ReconstructedParticles, RP_ts, Bz, PV_reco)', False))
+            clusters = 'RP_cluster, ' if self.has_photons else ''
+            plan.append((fits, f'{ns}::fit_{fit}(cands, ReconstructedParticles, RP_ts, {clusters}Bz, PV_reco)',
+                         False))
             plan += [(f'{fit}_{col}', f'k4DTF::{func}({fits})', True)
                      for col, func in [('status', 'fitStatus'), ('chi2', 'fitChi2'), ('ndf', 'fitNdf'),
                                        ('nIter', 'fitNIter'), ('prob', 'fitProb')]]
@@ -272,7 +322,8 @@ class Analysis():
         def has(col):
             return col in names or d.HasColumn(col)
 
-        for alias, choices in COLUMNS.items():
+        columns = dict(COLUMNS, **(PHOTON_COLUMNS if self.has_photons else {}))
+        for alias, choices in columns.items():            
             found = next((c for c in choices if has(c)), None)
             if found is None:
                 raise RuntimeError(f'None of {choices} found in the input; check the file with podio-dump.')

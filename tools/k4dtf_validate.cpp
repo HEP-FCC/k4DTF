@@ -24,6 +24,7 @@
 ///   <node>_trueVtx_{x,y,z}, _fitVtx_{x,y,z}, _fitVtxErr_{x,y,z}, _pullVtx_{x,y,z}
 ///   <node>_trueCtau, _fitCtau, _fitCtauErr, _pullCtau composite nodes
 ///   <leaf>_pull{D0,Phi,Omega,Z0,TanLambda}            input track vs MC helix (fit independent)
+///   <photon>_pullE                                    cluster energy vs MC (fit independent)
 
 #include <algorithm>
 #include <array>
@@ -41,6 +42,7 @@
 #include "TTreeReader.h"
 #include "TTreeReaderArray.h"
 #include "TTreeReaderValue.h"
+#include "edm4hep/ClusterData.h"
 #include "edm4hep/MCParticleData.h"
 #include "edm4hep/ReconstructedParticleData.h"
 #include "edm4hep/TrackState.h"
@@ -54,7 +56,8 @@ namespace {
 
 constexpr float kInvalid = -999.f;
 constexpr int kNoTrack = -1;  // TrackState::location of placeholder states (stage 1)
-
+constexpr int kNoCluster = -1;  // ClusterData::type of placeholder clusters (stage 1)
+  
 struct Options {
   std::string input, output = "dtf_validation.root", descriptor;
   std::vector<std::string> labels;
@@ -173,11 +176,13 @@ int main(int argc, char** argv) {
 
   using RecoArr = TTreeReaderArray<edm4hep::ReconstructedParticleData>;
   using TrackArr = TTreeReaderArray<edm4hep::TrackState>;
+  using ClusterArr = TTreeReaderArray<edm4hep::ClusterData>;  
   using MCArr = TTreeReaderArray<edm4hep::MCParticleData>;
   using DArr = TTreeReaderArray<double>;
   using FArr = TTreeReaderArray<float>;
   std::vector<std::unique_ptr<RecoArr>> leafReco;
   std::vector<std::unique_ptr<TrackArr>> leafTrack, leafTrue;
+  std::vector<std::unique_ptr<ClusterArr>> leafCluster;  // photons only, else null  
   std::vector<std::unique_ptr<MCArr>> nodeMC;
   std::map<int, std::unique_ptr<FArr>> preMass;
   std::map<int, std::unique_ptr<DArr>> trueCtau;
@@ -198,6 +203,8 @@ int main(int argc, char** argv) {
     leafReco.push_back(std::make_unique<RecoArr>(reader, (L + "_reco").c_str()));
     leafTrack.push_back(std::make_unique<TrackArr>(reader, (L + "_track").c_str()));
     leafTrue.push_back(std::make_unique<TrackArr>(reader, (L + "_trueTrack").c_str()));
+    leafCluster.push_back(std::abs(flat[n].pdg) == 22 ? std::make_unique<ClusterArr>(reader, (L + "_cluster").c_str())
+                                                       : nullptr);    
   }
 
   // --- output --------------------------------------------------------------------
@@ -212,6 +219,10 @@ int main(int argc, char** argv) {
     for (const char* q : {"_trueM", "_trueP", "_fitM", "_fitMErr", "_fitP", "_pullP"}) row.f[L + q] = kInvalid;
     if (flat[n].isLeaf()) {
       for (const char* h : helix) row.f[L + "_pull" + h] = kInvalid;
+      if (std::abs(flat[n].pdg) == 22)
+        row.f[L + "_pullE"] = kInvalid;
+      else
+        for (const char* h : helix) row.f[L + "_pull" + h] = kInvalid;      
       continue;
     }
     for (const char* q : {"_preM", "_trueCtau", "_fitCtau", "_fitCtauErr", "_pullCtau"}) row.f[L + q] = kInvalid;
@@ -259,10 +270,22 @@ int main(int argc, char** argv) {
       for (std::size_t l = 0; l < nLeaves; ++l) {
         const auto& rp = (*leafReco[l])[j];
         const auto& ts = (*leafTrack[l])[j];
+        const edm4hep::ClusterData* cl = leafCluster[l] ? &(*leafCluster[l])[j] : nullptr;
+        if (cl && (cl->type == kNoCluster || cl->energy <= 0)) cl = nullptr;
         auto p = ts.location != kNoTrack ? k4DTF::DTFParticle::fromEDM4hep(rp, ts, *Bz, rp.mass)
+                 : cl                    ? k4DTF::DTFParticle::fromEDM4hep(rp, *cl)
                                          : k4DTF::DTFParticle::fromEDM4hep(rp);
         leaves.push_back(std::move(p));
 
+        // photon energy pull against the MC (independent of the fit)
+        if (cl) {
+          const auto& mcl = (*nodeMC[leafNodes[l]])[j];
+          const double eTrue = std::sqrt(mcl.momentum.x * mcl.momentum.x + mcl.momentum.y * mcl.momentum.y +
+                                         mcl.momentum.z * mcl.momentum.z);
+          if (mcl.PDG != 0)
+            row.f[opt.labels[leafNodes[l]] + "_pullE"] = pull(cl->energy, eTrue, cl->energyError);
+        }
+	
         // track-parameter pulls against the MC helix (independent of the fit)
         const auto& tt = (*leafTrue[l])[j];
         const auto& Lb = opt.labels[leafNodes[l]];

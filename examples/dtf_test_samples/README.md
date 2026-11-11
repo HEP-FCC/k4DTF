@@ -16,10 +16,11 @@ Decay modes (each with its charge conjugate):
 | `Bd2DstPi` | `B0 -> (D*(2010)- -> (D~0 -> K+ pi-) pi-) pi+` | `B Dst D0 D0_K D0_pi Dst_pi B_pi` |
 | `Bu2D0K_D02KPi` | `B- -> (D0 -> K- pi+) K-` | `B D0 D0_K D0_pi B_K` |
 | `Bu2D0K_D02KSPiPi` | `B- -> (D0 -> (KS0 -> pi+ pi-) pi+) K-` | `B D0 KS KS_pip KS_pim D0_pip D0_pim B_K` |
+| `Bu2D0Pi_KPiPi0` | `B- -> (D0 -> K- pi+ (pi0 -> gamma gamma)) pi-` | `B D0 D0_K D0_pi D0_pi0 pi0_g1 pi0_g2 B_pi` |
 
 `Bd2DstPi` has three levels: a displaced B, a D* resonance decaying at the B
 vertex (with a soft pion), and a displaced D0. `Bu2D0K_D02KPi` is the simplest
-two-vertex chain. `Bu2D0K_D02KSPiPi` includes long-lived particle (KS). 
+two-vertex chain. `Bu2D0K_D02KSPiPi` includes long-lived particle (KS). `Bu2D0Pi_KPiPi0` has a resolved pi0: two photon clusters that point back to the D0 vertex, with the pi0 mass constrained in `DTFPV`.
 
 ## Quick start
 
@@ -87,13 +88,13 @@ from the table above; `-999` marks missing values.
 | `<leaf>_reco` | `edm4hep::ReconstructedParticleData` | with the descriptor's mass hypothesis and PDG; 4-momentum covariance propagated from the track |
 | `<leaf>_track` | `edm4hep::TrackState` | reconstructed helix with covariance (fitter input) |
 | `<leaf>_trueTrack` | `edm4hep::TrackState` | exact helix of the matched MC particle, same conventions, zero covariance |
+| `<photon>_cluster` | `edm4hep::ClusterData` | photon leaves: cluster position, energy and errors as given to the fitter (see Photons below) |
 | `<node>_M` | float | invariant mass before the fit [GeV] |
 | `<node>_trueProdVtx_{x,y,z}`, `<node>_trueDecayVtx_{x,y,z}` | double | true vertices [mm] |
 | `<node>_trueCtau` | double | true proper decay length [mm] |
 | `deltaM` | float | `Dst_M - D0_M` (Bd2DstPi only) |
 
-**Per candidate and fit configuration** (`DTF`: no constraints; `DTFPV`: D0
-mass and primary-vertex constraints)
+**Per candidate and fit configuration** (`DTF`: no constraints; `DTFPV`: mass and primary-vertex constraints)
 
 | Column | Content |
 |---|---|
@@ -108,7 +109,8 @@ One row per candidate (`--signal-only` keeps matched ones): fit summary,
 `<L>_{true,fit}{M,P}`, `<L>_pullP`, decay-vertex and `ctau` values and pulls for
 composite nodes, primary-vertex pulls (`pv_pull_{x,y,z}`), and for every leaf
 the pulls of the input track parameters against the MC helix
-(`<leaf>_pull{D0,Phi,Omega,Z0,TanLambda}`). The track pulls do not depend on the
+(`<leaf>_pull{D0,Phi,Omega,Z0,TanLambda}`),or for photons the pull of the
+cluster energy (`<photon>_pullE`). These pulls do not depend on the
 fit and should be standard normal already; they are the first check that the
 inputs and conventions below are right.
 
@@ -126,6 +128,19 @@ inputs and conventions below are right.
 - **Reconstructed particles** from Delphes have the pion mass, PDG ±211 and an
   empty 4-momentum covariance. `<leaf>_reco` and the fitter inputs use the
   descriptor's mass hypothesis and the covariance propagated from the track.
+- **Photons** are the neutral reconstructed particles whose cluster is in
+  `EFlowPhoton`. The fitter needs the cluster position and the errors of
+  position and energy. k4SimDelphes writes them from v00-09 (Key4hep nightlies
+  from September 2026); older files have the energy only. What is missing is
+  taken from `CALORIMETER` in the stage-1 script (IDEA card defaults): the
+  position where the photon direction meets the calorimeter front face, the
+  position error from the tower size, and the ECAL energy resolution. Delphes
+  places a photon uniformly within its 0.02 × 0.02 tower, so the angular
+  error with respect to the true impact point is 0.02/√6 = 8.2 mrad.
+  k4SimDelphes v00-09 writes 0.02/√12, half the variance. In the toy
+  (B- -> D0(K- pi+ pi0) pi-) that gives ⟨chi2⟩ = 7.3 for ndf 6 and
+  pi0/D0 momentum pulls of 1.25; `--photon-errors model` uses the
+  `CALORIMETER` errors also for files that have their own.  
 - **PID** is MC truth (the PDG of the linked MC particle), i.e. perfect.
 - **Truth matching**: a composite node is matched if all its daughters are, they
   share one MC mother with the right PDG code, and that mother has no other
