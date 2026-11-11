@@ -75,6 +75,13 @@ inline Particle BdToDstPi() {
   return composite(511, "B0", mB, 0.455, {Dst, leaf(211, "pi+", mPi, +1)});
 }
 
+/// B0 -> (K*0 -> K+ pi-) gamma
+inline Particle BdToKstGamma() {
+  const double mK = 0.493677, mPi = 0.13957, mKst = 0.89555, mB = 5.27958;
+  auto Kst = composite(313, "K*0", mKst, 0.0, {leaf(321, "K+", mK, +1), leaf(-211, "pi-", mPi, -1)}, true);
+  return composite(511, "B0", mB, 0.455, {Kst, leaf(22, "gamma", 0.0, 0)});
+}
+
 class Generator {
 public:
   explicit Generator(unsigned seed, double Bz = 2.0) : m_rng(seed), m_Bz(Bz) {}
@@ -125,12 +132,52 @@ public:
     return c;
   }
 
-  /// Build the fitter input; helix measurements for charged leaves.
+  /// Calorimeter of the toy: a cylinder of radius kCaloR closed by endcaps
+  /// at |z| = kCaloZ [mm], roughly the IDEA calorimeter front face.
+  static constexpr double kCaloR = 2100, kCaloZ = 2500;
+
+  /// Smeared cluster of a photon: the point where it reaches the calorimeter,
+  /// with transverse resolution 3 mm, 20 mm along the shower (depth), and
+  /// sigma(E)/E = 11%/sqrt(E) + 1% (dual-readout-like).
+  PhotonMeasurement measurePhoton(const Particle& p) {
+    const Eigen::Vector3d n = p.p4.head<3>().normalized();
+    const Eigen::Vector3d x0 = p.production;
+    // path length to the barrel and to the endcap; the smaller one is hit
+    const double a = n.x() * n.x() + n.y() * n.y();
+    const double b = x0.x() * n.x() + x0.y() * n.y();
+    const double c = x0.x() * x0.x() + x0.y() * x0.y() - kCaloR * kCaloR;
+    double t = a > 0 ? (-b + std::sqrt(b * b - a * c)) / a : 1e30;
+    if (n.z() != 0) t = std::min(t, ((n.z() > 0 ? kCaloZ : -kCaloZ) - x0.z()) / n.z());
+    const Eigen::Vector3d hit = x0 + t * n;
+
+    const double E = p.p4(3);
+    const double sT = 3.0, sD = 20.0, sE = E * std::hypot(0.11 / std::sqrt(E), 0.01);
+    PhotonMeasurement m;
+    m.cov.setZero();
+    m.cov.topLeftCorner<3, 3>() =
+        sT * sT * (Eigen::Matrix3d::Identity() - n * n.transpose()) + sD * sD * n * n.transpose();
+    m.cov(3, 3) = sE * sE;
+    const Eigen::LLT<Eigen::Matrix4d> llt(m.cov);
+    std::normal_distribution<double> n01(0, 1);
+    Eigen::Vector4d z;
+    for (int i = 0; i < 4; ++i) z(i) = n01(m_rng);
+    const Eigen::Vector4d smear = llt.matrixL() * z;
+    m.clusterPos = hit + smear.head<3>();
+    m.energy = E + smear(3);
+    return m;
+  }
+
+  /// Build the fitter input; helix measurements for charged leaves,
+  /// calorimeter clusters for photons.
   DecayNodeInput input(const Particle& p, const std::vector<int>& massConstrained = {}) {
     DecayNodeInput in;
     in.pdgCode = p.pdg;
     in.name = p.name;
     in.mass = p.mass;
+    if (p.daughters.empty() && p.charge == 0) {
+      in.measurement = measurePhoton(p);
+      return in;
+    }
     if (p.daughters.empty()) {
       TrackMeasurement t;
       t.charge = p.charge;

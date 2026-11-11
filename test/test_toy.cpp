@@ -175,3 +175,10 @@ TEST_CASE("Toy B0 -> (D*- -> (D~0 -> K+ pi-) pi-) pi+ with primary vertex", "[to
   // 4 helices (20) + PV (3) + D0 mass (1) - B vertex+flight (4) - D0 flight (1) - momenta (12) = 7
   checkToy(runToy(toy::BdToDstPi, true, 600, 3, {-421}), 7);
 }
+
+TEST_CASE("Toy B0 -> (K*0 -> K+ pi-) gamma with primary vertex: photons in all directions", "[toy][photon]") {
+  // 2 helices (10) + photon (3) + PV (3) - B vertex+flight (4) - momenta (9) = 3
+  // Photons cover |cos theta| < 0.8 around the B direction, so many are in the
+  // barrel (pz ~ 0), where a px/pz, py/pz parametrisation would diverge.
+  checkToy(runToy(toy::BdToKstGamma, true, 600, 4, {}), 3);
+}

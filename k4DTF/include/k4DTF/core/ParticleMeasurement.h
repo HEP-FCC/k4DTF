@@ -32,10 +32,15 @@ struct TrackMeasurement {
   std::optional<HelixMeasurement> helix;
 };
 
+/// A photon measured by a calorimeter cluster. The photon is assumed to come
+/// from its mother's vertex and to point at the cluster.
 struct PhotonMeasurement {
-  Eigen::Vector3d clusterPos;
-  double energy;
-  Eigen::Matrix3d cov;
+  Eigen::Vector3d clusterPos;  ///< [mm]
+  double energy;               ///< [GeV]
+  /// Covariance of (x, y, z, E). For a cluster with transverse resolution
+  /// s_t and depth resolution s_d along its direction n:
+  /// s_t^2 (1 - n n^T) + s_d^2 n n^T in the position block.
+  Eigen::Matrix4d cov;
 };
 
 struct CompositeMeasurement {
