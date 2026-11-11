@@ -9,12 +9,15 @@
 /// Only Eigen and k4DTF/core are used, so the tests run without ROOT I/O.
 
 #include <cmath>
+#include <optional>
 #include <random>
+#include <tuple>
 #include <string>
 #include <vector>
 
 #include <Eigen/Dense>
 
+#include "k4DTF/CalorimeterResolution.h"
 #include "k4DTF/core/DecayNodeInput.h"
 #include "k4DTF/core/Helix.h"
 
@@ -88,6 +91,14 @@ inline Particle BdToJpsiKS() {
   auto Jpsi = composite(443, "J/psi", mJpsi, 0.0, {leaf(-13, "mu+", mMu, +1), leaf(13, "mu-", mMu, -1)}, true);
   auto KS = composite(310, "KS0", mKS, 26.84, {leaf(211, "pi+", mPi, +1), leaf(-211, "pi-", mPi, -1)});
   return composite(511, "B0", mB, 0.455, {Jpsi, KS});
+}
+
+/// B- -> (D0 -> K- pi+ (pi0 -> gamma gamma)) pi-, D0 decay in flat phase space
+inline Particle BuToD0Pi_KPiPi0() {
+  const double mK = 0.493677, mPi = 0.13957, mPi0 = 0.1349766, mD0 = 1.86484, mB = 5.27926;
+  auto pi0 = composite(111, "pi0", mPi0, 0.0, {leaf(22, "gamma", 0.0, 0), leaf(22, "gamma", 0.0, 0)}, true);
+  auto D0 = composite(421, "D0", mD0, 0.1229, {leaf(-321, "K-", mK, -1), leaf(211, "pi+", mPi, +1), pi0});
+  return composite(-521, "B-", mB, 0.491, {D0, leaf(-211, "pi-", mPi, -1)});
 }
 
 /// Largest transverse decay radius [mm] of any composite in the tree.
@@ -182,6 +193,52 @@ public:
     return m;
   }
 
+  /// Photons as Delphes reconstructs them with this calorimeter (instead of
+  /// measurePhoton()): at the (eta, phi) of their tower on the front face,
+  /// drawn uniformly within the tower with smearTowerCenter, energy smeared
+  /// with the ECAL resolution; covariance from the resolution model.
+  void useDelphesCalorimeter(const CalorimeterResolution& calo) { m_calo = calo; }
+
+  PhotonMeasurement measurePhotonDelphes(const Particle& p, const CalorimeterResolution& calo) {
+    const Eigen::Vector3d n = p.p4.head<3>().normalized();
+    const Eigen::Vector3d x0 = p.production;
+    const double a = n.x() * n.x() + n.y() * n.y();
+    const double b = x0.x() * n.x() + x0.y() * n.y();
+    const double c = x0.x() * x0.x() + x0.y() * x0.y() - calo.radius * calo.radius;
+    double t = a > 0 ? (-b + std::sqrt(b * b - a * c)) / a : 1e30;
+    bool barrel = true;
+    if (n.z() != 0) {
+      const double tz = ((n.z() > 0 ? calo.halfLength : -calo.halfLength) - x0.z()) / n.z();
+      if (tz < t) {
+        t = tz;
+        barrel = false;
+      }
+    }
+    const Eigen::Vector3d hit = x0 + t * n;
+
+    // tower of the impact point, seen from the origin
+    const double rt = std::hypot(hit.x(), hit.y());
+    const double eta = std::asinh(hit.z() / rt), phi = std::atan2(hit.y(), hit.x());
+    const double wEta = calo.towerSize;
+    const int nPhi = 2 * static_cast<int>(kPi / calo.towerSize);
+    const double wPhi = 2 * kPi / nPhi;
+    const double eta0 = std::floor(eta / wEta) * wEta, phi0 = -kPi + std::floor((phi + kPi) / wPhi) * wPhi;
+    std::uniform_real_distribution<double> u(0, 1);
+    const double etaR = eta0 + (calo.smearTowerCenter ? u(m_rng) : 0.5) * wEta;
+    const double phiR = phi0 + (calo.smearTowerCenter ? u(m_rng) : 0.5) * wPhi;
+    Eigen::Vector3d pos;
+    if (barrel) {
+      pos << calo.radius * std::cos(phiR), calo.radius * std::sin(phiR), calo.radius * std::sinh(etaR);
+    } else {
+      const double z = hit.z() > 0 ? calo.halfLength : -calo.halfLength;
+      const double r = z / std::sinh(etaR);
+      pos << r * std::cos(phiR), r * std::sin(phiR), z;
+    }
+    std::normal_distribution<double> n01(0, 1);
+    const double E = p.p4(3) + std::sqrt(calo.energyVariance(p.p4(3))) * n01(m_rng);
+    return calo.measurement(pos, E);
+  }
+
   /// Build the fitter input; helix measurements for charged leaves,
   /// calorimeter clusters for photons.
   DecayNodeInput input(const Particle& p, const std::vector<int>& massConstrained = {}) {
@@ -190,7 +247,7 @@ public:
     in.name = p.name;
     in.mass = p.mass;
     if (p.daughters.empty() && p.charge == 0) {
-      in.measurement = measurePhoton(p);
+      in.measurement = m_calo ? measurePhotonDelphes(p, *m_calo) : measurePhoton(p);
       return in;
     }
     if (p.daughters.empty()) {
@@ -212,6 +269,26 @@ public:
 private:
   std::mt19937_64 m_rng;
   double m_Bz;
+  std::optional<CalorimeterResolution> m_calo;
+
+  /// Two-body momentum in the rest frame of a particle of mass M.
+  static double q2body(double M, double m1, double m2) {
+    const double x = (M * M - std::pow(m1 + m2, 2)) * (M * M - std::pow(m1 - m2, 2));
+    return x > 0 ? std::sqrt(x) / (2 * M) : 0.0;
+  }
+
+  /// Momenta of an isotropic two-body decay of `frame` to masses m1, m2.
+  std::pair<Eigen::Vector4d, Eigen::Vector4d> twoBody(const Eigen::Vector4d& frame, double M, double m1,
+                                                      double m2) {
+    std::uniform_real_distribution<double> u(0, 1);
+    const double q = q2body(M, m1, m2);
+    const double ct = 2 * u(m_rng) - 1, phi = 2 * kPi * u(m_rng), st = std::sqrt(1 - ct * ct);
+    const Eigen::Vector3d qv(q * st * std::cos(phi), q * st * std::sin(phi), q * ct);
+    Eigen::Vector4d qa, qb;
+    qa << qv, std::sqrt(q * q + m1 * m1);
+    qb << -qv, std::sqrt(q * q + m2 * m2);
+    return {boost(qa, frame), boost(qb, frame)};
+  }
 
   static Eigen::Vector4d boost(const Eigen::Vector4d& q, const Eigen::Vector4d& frame) {
     const double m = std::sqrt(frame(3) * frame(3) - frame.head<3>().squaredNorm());
@@ -233,20 +310,27 @@ private:
     const double L = p.trueCtau * p.p4.head<3>().norm() / p.mass;
     p.decay = production + L * dir;
 
-    // sequential two- or more-body decay: flat phase space by acceptance-rejection
-    // is overkill for tests; use isotropic two-body decays (all test modes are two-body)
-    std::uniform_real_distribution<double> u(0, 1);
     auto& a = p.daughters[0];
     auto& b = p.daughters[1];
     const double M = p.mass;
-    const double q = std::sqrt((M * M - std::pow(a.mass + b.mass, 2)) * (M * M - std::pow(a.mass - b.mass, 2))) / (2 * M);
-    const double ct = 2 * u(m_rng) - 1, phi = 2 * kPi * u(m_rng), st = std::sqrt(1 - ct * ct);
-    const Eigen::Vector3d qv(q * st * std::cos(phi), q * st * std::sin(phi), q * ct);
-    Eigen::Vector4d qa, qb;
-    qa << qv, std::sqrt(q * q + a.mass * a.mass);
-    qb << -qv, std::sqrt(q * q + b.mass * b.mass);
-    a.p4 = boost(qa, p.p4);
-    b.p4 = boost(qb, p.p4);
+    if (p.daughters.size() == 2) {
+      std::tie(a.p4, b.p4) = twoBody(p.p4, M, a.mass, b.mass);
+    } else {
+      // three-body phase space: m12 with weight q(M -> m12 m3) q(m12 -> m1 m2),
+      // by acceptance-rejection, then two isotropic two-body decays
+      auto& c = p.daughters[2];
+      std::uniform_real_distribution<double> u(0, 1);
+      const double lo = a.mass + b.mass, hi = M - c.mass;
+      const double wmax = q2body(M, lo, c.mass) * q2body(hi, a.mass, b.mass);
+      double m12 = lo;
+      do {
+        m12 = lo + (hi - lo) * u(m_rng);
+      } while (q2body(M, m12, c.mass) * q2body(m12, a.mass, b.mass) < wmax * u(m_rng));
+      Eigen::Vector4d p12;
+      std::tie(p12, c.p4) = twoBody(p.p4, M, m12, c.mass);
+      std::tie(a.p4, b.p4) = twoBody(p12, m12, a.mass, b.mass);
+      decay(c, p.decay);
+    }
     decay(a, p.decay);
     decay(b, p.decay);
   }

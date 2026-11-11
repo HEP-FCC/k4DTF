@@ -4,6 +4,7 @@ add_library(k4DTF SHARED
   src/DecayTreeFitter.cpp
   src/ParticleTable.cpp
   src/TreeInput.cpp
+  src/CalorimeterResolution.cpp
   src/FitResult.cpp
   src/core/FitParams.cpp
   src/core/KalmanCalculator.cpp

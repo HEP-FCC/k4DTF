@@ -13,6 +13,7 @@
 #include <string>
 
 #include "ToyDecays.h"
+#include "k4DTF/CalorimeterResolution.h"
 #include "k4DTF/DecayTreeFitter.h"
 #include "k4DTF/core/Helix.h"
 
@@ -184,8 +185,10 @@ struct ToyResult {
 
 /// Fit nEvents toy decays and collect pulls by "<node index>_<quantity>".
 ToyResult runToy(toy::Particle (*make)(), bool withPV, int nEvents, unsigned seed,
-                 const std::vector<int>& massConstrained, double maxDecayRadius = 1e9) {
+                 const std::vector<int>& massConstrained, double maxDecayRadius = 1e9,
+                 const CalorimeterResolution* calo = nullptr) {
   toy::Generator gen(seed);
+  if (calo) gen.useDelphesCalorimeter(*calo);
   std::normal_distribution<double> n01(0, 1);
   const Eigen::Vector3d bs(4.5e-3, 2e-5, 0.3);  // luminous region [mm]
   ToyResult out;
@@ -259,6 +262,39 @@ TEST_CASE("Toy B0 -> (K*0 -> K+ pi-) gamma with primary vertex: photons in all d
   // Photons cover |cos theta| < 0.8 around the B direction, so many are in the
   // barrel (pz ~ 0), where a px/pz, py/pz parametrisation would diverge.
   checkToy(runToy(toy::BdToKstGamma, true, 600, 4, {}), 3);
+}
+
+TEST_CASE("Toy B- -> (D0 -> K- pi+ (pi0 -> gamma gamma)) pi- with Delphes IDEA photons", "[toy][photon]") {
+  // 3 helices (15) + 2 photons (6) + PV (3) + D0 and pi0 masses (2)
+  //   - B vertex+flight (4) - D0 flight (1) - momenta (15) = 6
+  // Photons are placed as Delphes does: uniformly within their 0.02 x 0.02
+  // tower, with the errors of CalorimeterResolution.
+  const CalorimeterResolution calo;
+  checkToy(runToy(toy::BuToD0Pi_KPiPi0, true, 600, 6, {421, 111}, 1e9, &calo), 6);
+}
+
+TEST_CASE("Calorimeter resolution model", "[photon]") {
+  CalorimeterResolution calo;
+  CHECK_THAT(calo.angularResolution(), WithinAbs(0.02 / std::sqrt(6.0), 1e-12));
+  calo.smearTowerCenter = false;
+  CHECK_THAT(calo.angularResolution(), WithinAbs(0.02 / std::sqrt(12.0), 1e-12));
+  calo.smearTowerCenter = true;
+  CHECK_THAT(std::sqrt(calo.energyVariance(1.0)), WithinAbs(std::sqrt(0.005 * 0.005 + 0.03 * 0.03 + 0.002 * 0.002), 1e-12));
+
+  // front face: barrel at 45 deg, endcap at small angle
+  CHECK((calo.frontFace({1.0, 0.0, 1.0}) - Eigen::Vector3d(2250, 0, 2250)).norm() < 1e-9);
+  CHECK((calo.frontFace({0.1, 0.0, -1.0}) - Eigen::Vector3d(250, 0, -2500)).norm() < 1e-9);
+
+  // position covariance: nothing along the line of sight, r sigma(theta)
+  // along theta and r sin(theta) sigma(phi) along phi
+  const Eigen::Vector3d pos(2250.0, 0.0, 1000.0);
+  const auto cov = calo.positionCovariance(pos);
+  const Eigen::Vector3d n = pos.normalized();
+  CHECK(std::abs(n.dot(cov * n)) < 1e-9);
+  const double r = pos.norm(), st = 2250.0 / r, s = calo.angularResolution();
+  CHECK_THAT(cov(1, 1), WithinAbs(std::pow(2250.0 * s, 2), 1e-6));
+  const Eigen::Vector3d uTheta(1000.0 / r, 0.0, -st);
+  CHECK_THAT(uTheta.dot(cov * uTheta), WithinAbs(std::pow(r * s * st, 2), 1e-6));
 }
 
 TEST_CASE("Toy B0 -> (J/psi -> mu+ mu-) (KS0 -> pi+ pi-) with primary vertex: KS up to 60 cm", "[toy][seed]") {

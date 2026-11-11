@@ -117,6 +117,9 @@ FitResult DecayTreeFitter::fit(const DecayNodeInput& input,
   int ndiverging = 0;
   double prevChiSquare = -1;
   double prevAbsDeltaChi2 = -1;
+  double prevDeltaChi2 = 0;
+  // Step length; halved when the chi2 starts to oscillate (see below).
+  double damping = 1.0;
 
   auto finish = [&](ErrCode status, int iter) {
     result.status = status;
@@ -150,6 +153,8 @@ FitResult DecayTreeFitter::fit(const DecayNodeInput& input,
     }
 
     ErrCode status = chain->filter(reference, *fitparams);
+    if (damping < 1.0 && !failure(status))
+      fitparams->par() = reference.par() + damping * (fitparams->par() - reference.par());
 
     double chisq = fitparams->chiSquare();
     double deltachisq = chisq - prevChiSquare;
@@ -179,9 +184,17 @@ FitResult DecayTreeFitter::fit(const DecayNodeInput& input,
       }
     }
 
+    // A chi2 that goes up and down without settling is a period-2 cycle of
+    // the linearised iteration: it overshoots, typically with a mass
+    // constraint on a light particle (pi0 -> gamma gamma) where the
+    // constraint is strongly non-linear on the scale of the measurement
+    // errors. Shorter steps make it contract again.
+    if (iter > 2 && deltachisq * prevDeltaChi2 < 0 && damping > 0.25) damping *= 0.5;
+
     if (deltachisq < 0) ndiverging = 0;
     prevChiSquare = chisq;
     prevAbsDeltaChi2 = std::abs(deltachisq);
+    prevDeltaChi2 = deltachisq;
   }
 
   return finish(ErrCode::slowdivergingfit, m_config.maxIter);
