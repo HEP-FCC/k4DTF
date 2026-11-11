@@ -76,6 +76,39 @@ TEST_CASE("Helix momentum covariance matches numerical propagation", "[helix]") 
   CHECK((analytic - numeric).norm() < 1e-6 * numeric.norm());
 }
 
+TEST_CASE("Analytic helix Jacobian matches numerical derivatives", "[helix]") {
+  const double Bz = 2.0;
+  const Eigen::Vector3d ref(0.1, -0.05, 0.2);
+  // prompt, displaced (B/D), far displaced (KS), soft and backward tracks
+  const std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> cases = {
+      {{0.0, 0.0, 0.0}, {1.5, -0.7, 2.0}},     {{0.8, -1.2, 3.0}, {12.0, 5.0, -8.0}},
+      {{250.0, 310.0, -120.0}, {0.9, 1.1, 0.4}}, {{3.0, 2.0, -1.0}, {0.12, -0.08, 0.05}},
+      {{-5.0, 1.0, 40.0}, {-2.0, -3.0, -6.0}}};
+  for (double q : {+1.0, -1.0}) {
+    for (const auto& [x, p] : cases) {
+      const auto analytic = helix::jacobian(x, p, q, Bz, ref);
+      Eigen::Matrix<double, 5, 6> numeric;
+      Eigen::Matrix<double, 6, 1> v;
+      v << x, p;
+      for (int k = 0; k < 6; ++k) {
+        const double h = 1e-6 * std::max(1.0, std::abs(v(k)));
+        auto up = v, dn = v;
+        up(k) += h;
+        dn(k) -= h;
+        helix::Vector5d d = helix::fromPositionMomentum(up.head<3>(), up.tail<3>(), q, Bz, ref) -
+                            helix::fromPositionMomentum(dn.head<3>(), dn.tail<3>(), q, Bz, ref);
+        d(helix::Phi) = helix::wrapPhi(d(helix::Phi));
+        numeric.col(k) = d / (2 * h);
+      }
+      for (int i = 0; i < 5; ++i)
+        for (int k = 0; k < 6; ++k) {
+          INFO("q " << q << " x " << x.transpose() << " d(par " << i << ")/d(" << k << ")");
+          CHECK_THAT(analytic(i, k), WithinAbs(numeric(i, k), 1e-6 * (1.0 + std::abs(numeric(i, k)))));
+        }
+    }
+  }
+}
+
 TEST_CASE("Phi wrapping", "[helix]") {
   CHECK_THAT(helix::wrapPhi(3 * toy::kPi), WithinAbs(toy::kPi, 1e-12));
   CHECK_THAT(helix::wrapPhi(-toy::kPi), WithinAbs(toy::kPi, 1e-12));

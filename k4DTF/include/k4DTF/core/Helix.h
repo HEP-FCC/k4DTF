@@ -38,6 +38,10 @@ double wrapPhi(double phi);
 Vector5d fromPositionMomentum(const Eigen::Vector3d& x, const Eigen::Vector3d& p, double q, double Bz,
                               const Eigen::Vector3d& reference = Eigen::Vector3d::Zero());
 
+/// Jacobian d(par) / d(x, y, z, px, py, pz) of fromPositionMomentum().
+Eigen::Matrix<double, 5, 6> jacobian(const Eigen::Vector3d& x, const Eigen::Vector3d& p, double q, double Bz,
+                                     const Eigen::Vector3d& reference = Eigen::Vector3d::Zero());
+
 /// Momentum [GeV] at the PCA.
 Eigen::Vector3d momentum(const Vector5d& par, double Bz);
 

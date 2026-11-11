@@ -47,6 +47,58 @@ Vector5d fromPositionMomentum(const Eigen::Vector3d& xglobal, const Eigen::Vecto
   return par;
 }
 
+Eigen::Matrix<double, 5, 6> jacobian(const Eigen::Vector3d& xglobal, const Eigen::Vector3d& p, double q, double Bz,
+                                     const Eigen::Vector3d& reference) {
+  // Derivatives of the formulae in fromPositionMomentum(). With
+  //   a = -q Bz kC,  U = px + a y,  W = py - a x,  T^2 = U^2 + W^2
+  // the parameters are
+  //   phi0 = atan2(W, U)            D0 = (T - pT) / a
+  //   omega = -a / pT               tanLambda = pz / pT
+  //   Z0 = z - pz s / a,  s = atan2(py, px) - phi0
+  enum { X = 0, Y = 1, Zc = 2, PX = 3, PY = 4, PZ = 5 };
+  Eigen::Matrix<double, 5, 6> J = Eigen::Matrix<double, 5, 6>::Zero();
+  const Eigen::Vector3d x = xglobal - reference;
+  const double px = p.x(), py = p.y(), pz = p.z();
+  const double pt2 = px * px + py * py, pt = std::sqrt(pt2);
+  const double a = -q * Bz * kC;
+  if (pt <= 0.0 || a == 0.0) return J;
+
+  const double U = px + a * x.y(), W = py - a * x.x();
+  const double T2 = U * U + W * W, T = std::sqrt(T2);
+  const double pt3 = pt2 * pt;
+
+  // phi0
+  J(Phi, X) = -a * U / T2;
+  J(Phi, Y) = -a * W / T2;
+  J(Phi, PX) = -W / T2;
+  J(Phi, PY) = U / T2;
+
+  // D0 = (T - pT) / a
+  J(D0, X) = -W / T;
+  J(D0, Y) = U / T;
+  J(D0, PX) = (U / T - px / pt) / a;
+  J(D0, PY) = (W / T - py / pt) / a;
+
+  // omega = -a / pT
+  J(Omega, PX) = a * px / pt3;
+  J(Omega, PY) = a * py / pt3;
+
+  // tanLambda = pz / pT
+  J(TanLambda, PX) = -pz * px / pt3;
+  J(TanLambda, PY) = -pz * py / pt3;
+  J(TanLambda, PZ) = 1.0 / pt;
+
+  // Z0 = z - pz s / a, with ds = d(atan2(py, px)) - dphi0
+  const double s = wrapPhi(std::atan2(py, px) - std::atan2(W, U));
+  J(Z0, Zc) = 1.0;
+  J(Z0, X) = pz / a * J(Phi, X);
+  J(Z0, Y) = pz / a * J(Phi, Y);
+  J(Z0, PX) = -pz / a * (-py / pt2 - J(Phi, PX));
+  J(Z0, PY) = -pz / a * (px / pt2 - J(Phi, PY));
+  J(Z0, PZ) = -s / a;
+  return J;
+}
+
 Eigen::Vector3d momentum(const Vector5d& par, double Bz) {
   const double omega = std::abs(par(Omega));
   if (omega == 0.0) return Eigen::Vector3d::Zero();

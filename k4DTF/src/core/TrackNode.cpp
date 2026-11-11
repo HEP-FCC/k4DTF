@@ -3,7 +3,6 @@
 
 #include "core/TrackNode.h"
 
-#include <algorithm>
 #include <cmath>
 
 #include "core/FitParams.h"
@@ -81,26 +80,12 @@ ErrCode TrackNode::projectHelixConstraint(const FitParams& fitparams, Projection
   const double Bz = m_helix->Bz;
   const double charge = this->charge();
   const auto& ref = m_helix->referencePoint;
-  auto h = [&](const Eigen::Matrix<double, 6, 1>& v) {
-    return helix::fromPositionMomentum(v.head<3>(), v.tail<3>(), charge, Bz, ref);
-  };
-
-  helix::Vector5d r = h(q) - m_helix->par;
+  helix::Vector5d r = helix::fromPositionMomentum(q.head<3>(), q.tail<3>(), charge, Bz, ref) - m_helix->par;
   r(helix::Phi) = helix::wrapPhi(r(helix::Phi));
 
-  // Jacobian by central differences.
-  // TODO: analytic derivatives (see the BaBar/LHCb DTF helix constraint).
-  const double pmag = q.tail<3>().norm();
-  for (int k = 0; k < 6; ++k) {
-    const double step = k < 3 ? 1e-4 * std::max(1.0, std::abs(q(k))) : 1e-6 * std::max(1e-3, pmag);
-    auto up = q, dn = q;
-    up(k) += step;
-    dn(k) -= step;
-    helix::Vector5d d = h(up) - h(dn);
-    d(helix::Phi) = helix::wrapPhi(d(helix::Phi));
-    d /= 2 * step;
-    for (int row = 0; row < 5; ++row) p.H(row, index[k]) = d(row);
-  }
+  const auto J = helix::jacobian(q.head<3>(), q.tail<3>(), charge, Bz, ref);
+  for (int k = 0; k < 6; ++k)
+    for (int row = 0; row < 5; ++row) p.H(row, index[k]) = J(row, k);
   for (int row = 0; row < 5; ++row) {
     p.r(row) = r(row);
     for (int col = 0; col <= row; ++col) p.V(row, col) = m_helix->cov(row, col);
