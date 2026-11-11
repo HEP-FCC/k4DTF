@@ -13,12 +13,13 @@ Decay modes (each with its charge conjugate):
 
 | Mode | Descriptor | Nodes (pre-order) |
 |---|---|---|
-| `Bd2DstPi` | `B0 -> (D*(2010)- -> (D~0 -> K+ pi-) pi-) pi+` | `B Dst D0 K piD0 piSoft piB` |
-| `Bu2D0K` | `B- -> (D0 -> K- pi+) K-` | `B D0 KD0 piD0 KB` |
+| `Bd2DstPi` | `B0 -> (D*(2010)- -> (D~0 -> K+ pi-) pi-) pi+` | `B Dst D0 D0_K D0_pi Dst_pi B_pi` |
+| `Bu2D0K_D02KPi` | `B- -> (D0 -> K- pi+) K-` | `B D0 D0_K D0_pi B_K` |
+| `Bu2D0K_D02KSPiPi` | `B- -> (D0 -> (KS0 -> pi+ pi-) pi+) K-` | `B D0 KS KS_pip KS_pim D0_pip D0_pim B_K` |
 
 `Bd2DstPi` has three levels: a displaced B, a D* resonance decaying at the B
-vertex (with a soft pion), and a displaced D0. `Bu2D0K` is the simplest
-two-vertex chain.
+vertex (with a soft pion), and a displaced D0. `Bu2D0K_D02KPi` is the simplest
+two-vertex chain. `Bu2D0K_D02KSPiPi` includes long-lived particle (KS). 
 
 ## Quick start
 
@@ -40,7 +41,7 @@ fccanalysis run examples/dtf_test_samples/analysis/stage1_dtf_inputs.py -j 4 \
 # 3. stand-alone fit and validation tree (re-run after every change to the fitter)
 k4dtf-validate --input dtf_inputs_Bd2DstPi.root --output dtf_validation_Bd2DstPi.root \
     --descriptor "B0 -> (D*(2010)- -> (D~0 -> K+ pi-) pi-) pi+" \
-    --labels B,Dst,D0,K,piD0,piSoft,piB --mass-constraint 421 --pv
+    --labels B,Dst,D0,D0_K,D0_pi,Dst_pi,B_pi --mass-constraint 421 --pv
 ```
 
 Every generated event contains one signal B; the other b hadron decays

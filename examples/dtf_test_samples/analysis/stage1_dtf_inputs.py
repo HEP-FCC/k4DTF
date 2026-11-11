@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026 CERN
+\65;6402;1c# SPDX-FileCopyrightText: Copyright (c) 2026 CERN
 # SPDX-License-Identifier: Apache-2.0
 '''
 FCCAnalyses stage 1 for k4DTF tests: build decay-tree candidates, attach MC
@@ -43,16 +43,23 @@ import ROOT
 MODES = {
     'Bd2DstPi': {
         'descriptor': 'B0 -> (D*(2010)- -> (D~0 -> K+ pi-) pi-) pi+',
-        'labels': ['B', 'Dst', 'D0', 'K', 'piD0', 'piSoft', 'piB'],
+        'labels': ['B', 'Dst', 'D0', 'D0_K', 'D0_pi', 'Dst_pi', 'B_pi'],
         'mass_windows': {511: (4.9, 5.7), 413: (1.95, 2.07), 421: (1.80, 1.93)},
         'fits': {'DTF': ([], False), 'DTFPV': ([421], True)},
         'derived': {'deltaM': 'Dst_M - D0_M'},
     },
-    'Bu2D0K': {
+    'Bu2D0K_D02KPi': {
         'descriptor': 'B- -> (D0 -> K- pi+) K-',
-        'labels': ['B', 'D0', 'KD0', 'piD0', 'KB'],
+        'labels': ['B', 'D0', 'D0_K', 'D0_pi', 'B_K'],
         'mass_windows': {521: (4.9, 5.7), 421: (1.80, 1.93)},
         'fits': {'DTF': ([], False), 'DTFPV': ([421], True)},
+        'derived': {},
+    },
+    'Bu2D0K_D02KSPiPi': {
+        'descriptor': 'B- -> (D0 -> (KS0 -> pi+ pi-) pi+ pi-) K-',
+        'labels': ['B', 'D0', 'KS', 'KS_pip', 'KS_pim', 'D0_pip', 'D0_pim', 'B_K'],
+        'mass_windows': {521: (4.9, 5.7), 421: (1.80, 1.93), 310 : (0.400,0.600) },
+        'fits': {'DTF': ([], False), 'DTFPV': ([421,310], True)},
         'derived': {},
     },
 }

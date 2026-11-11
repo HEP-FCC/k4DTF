@@ -6,8 +6,9 @@
 #   source /cvmfs/sw.hsf.org/key4hep/setup.sh
 #   ./generate.sh [MODE] [NEVENTS] [SEED] [OUTDIR]
 #
-#   MODE     Bd2DstPi (default)  B0 -> (D*- -> (D~0 -> K+ pi-) pi-) pi+   (+ c.c.)
-#            Bu2D0K              B- -> (D0 -> K- pi+) K-                  (+ c.c.)
+#   MODE     Bd2DstPi (default)  B0 -> (D*- -> (D~0 -> K+ pi-) pi-) pi+       (+ c.c.)
+#            Bu2D0K_D02KPi       B- -> (D0 -> K- pi+) K-                      (+ c.c.)
+#            Bu2D0K_D02KSPiPi    B- -> (D0 -> KS pi+ pi-) K-                  (+ c.c.)
 #   NEVENTS  number of events (default 10000)
 #   SEED     Pythia8 random seed (default 1)
 #   OUTDIR   output directory (default ./samples)
@@ -25,7 +26,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 case "${MODE}" in
   Bd2DstPi) DECFILE=Bd2DstPi_D0Kpi.dec; SIGPDG=511; SIGALIAS=Bd_SIGNAL ;;
-  Bu2D0K)   DECFILE=Bu2D0K_D0Kpi.dec;   SIGPDG=521; SIGALIAS=Bu_SIGNAL ;;
+  Bu2D0K_D02KPi)   DECFILE=Bu2D0K_D0Kpi.dec;   SIGPDG=521; SIGALIAS=Bu_SIGNAL ;;
+  Bu2D0K_D02KSPiPi)   DECFILE=Bu2D0K_D0KSpipi.dec;   SIGPDG=521; SIGALIAS=Bu_SIGNAL ;;  
   *) echo "Unknown MODE '${MODE}' (use Bd2DstPi or Bu2D0K)" >&2; exit 1 ;;
 esac
 

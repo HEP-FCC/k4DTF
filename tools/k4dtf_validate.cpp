@@ -7,7 +7,7 @@
 ///
 ///   k4dtf-validate --input dtf_inputs_Bd2DstPi.root --output dtf_validation.root
 ///       --descriptor "B0 -> (D*(2010)- -> (D~0 -> K+ pi-) pi-) pi+"
-///       --labels B,Dst,D0,K,piD0,piSoft,piB [--mass-constraint 421] [--pv]
+///       --labels B,Dst,D0,D0_K,D0_pi,Dst_pi,B_pi [--mass-constraint 421] [--pv]
 ///       [--signal-only] [--max-events N]
 ///
 /// The fitter is linked directly, so after changing the fitter a rebuild and
