@@ -3,7 +3,7 @@
 
 #pragma once
 
-namespace k4dtf {
+namespace k4DTF {
 
 struct ChiSquare {
   double value{0};
@@ -19,4 +19,4 @@ struct ChiSquare {
   }
 };
 
-} // namespace k4dtf
+} // namespace k4DTF

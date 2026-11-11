@@ -6,7 +6,7 @@
 #include <iomanip>
 #include <iostream>
 
-namespace k4dtf {
+namespace k4DTF {
 
 FitParams::FitParams(int dim)
     : m_dim(dim),
@@ -80,4 +80,4 @@ ChiSquare FitParams::chiSquare(const ParticleNode& p) const {
   return it != m_chiSquareMap.end() ? it->second : ChiSquare();
 }
 
-} // namespace k4dtf
+} // namespace k4DTF

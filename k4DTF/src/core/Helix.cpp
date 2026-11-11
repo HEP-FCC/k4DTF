@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-namespace k4dtf::helix {
+namespace k4DTF::helix {
 
 namespace {
 constexpr double kPi = 3.14159265358979323846;
@@ -262,4 +262,4 @@ Eigen::Matrix3d momentumCovariance(const Vector5d& par, const Matrix5d& cov, dou
   return J * cov * J.transpose();
 }
 
-}  // namespace k4dtf::helix
+}  // namespace k4DTF::helix

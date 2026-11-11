@@ -51,7 +51,7 @@ StatusCode DTFAlgorithm::initialize() {
     }
   }
 
-  k4dtf::DecayTreeFitter::Configuration cfg;
+  k4DTF::DecayTreeFitter::Configuration cfg;
   cfg.maxIter = m_maxIterations;
   cfg.convergenceCriterion = m_convergenceEps;
   m_fitter.setConfiguration(cfg);
@@ -68,7 +68,7 @@ StatusCode DTFAlgorithm::finalize() {
 namespace {
 
 /// Set explicit constraint masses (value > 0) on the nodes with these PDG codes.
-void setConstraintMasses(k4dtf::DecayNodeInput& in, const std::map<int, double>& masses) {
+void setConstraintMasses(k4DTF::DecayNodeInput& in, const std::map<int, double>& masses) {
   for (const auto& [pdg, m] : masses)
     if (m > 0 && (pdg == in.pdgCode || pdg == -in.pdgCode)) in.massConstraintValue = m;
   for (auto& d : in.daughters) setConstraintMasses(d, masses);
@@ -113,7 +113,7 @@ DTFAlgorithm::operator()(
   }
 
   // --- run the fit ---
-  k4dtf::FitResult result;
+  k4DTF::FitResult result;
   try {
     auto input = k4DTF::makeDecayNodeInput(*m_descriptor, leaves, constrained);
     setConstraintMasses(input, masses);

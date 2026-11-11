@@ -8,7 +8,7 @@
 #include "core/FitParams.h"
 #include "core/Projection.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 MergedPi0Node::MergedPi0Node(const DecayNodeInput& input, const ParticleNode* mother)
     : ParticleNode(input.name, input.pdgCode, mother) {
@@ -117,4 +117,4 @@ ErrCode MergedPi0Node::filter(const FitParams& reference, FitParams& params) con
                          &MergedPi0Node::projectPi0Constraint);
 }
 
-} // namespace k4dtf
+} // namespace k4DTF

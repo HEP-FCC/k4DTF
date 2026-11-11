@@ -18,7 +18,7 @@
 #include "core/ResonanceNode.h"
 #include "core/TrackNode.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 ParticleNode::ParticleNode(const std::string& name, int pdg, const ParticleNode* mother)
     : m_name(name), m_pdgCode(pdg), m_mother(mother) {}
@@ -229,4 +229,4 @@ int ParticleNode::nFinalChargedCandidates() const {
   return rc;
 }
 
-} // namespace k4dtf
+} // namespace k4DTF

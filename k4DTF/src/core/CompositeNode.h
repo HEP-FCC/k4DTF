@@ -7,7 +7,7 @@
 
 #include "core/ParticleNode.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 class CompositeNode : public ParticleNode {
 public:
@@ -37,4 +37,4 @@ private:
   bool m_hasEnergy{true};
 };
 
-} // namespace k4dtf
+} // namespace k4DTF

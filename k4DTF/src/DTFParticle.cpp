@@ -10,7 +10,6 @@
 
 namespace k4DTF {
 
-namespace helix = k4dtf::helix;
 
 namespace {
 
@@ -90,8 +89,8 @@ edm4hep::TrackState DTFTrack::toEDM4hep() const {
   return ts;
 }
 
-k4dtf::HelixMeasurement DTFTrack::toHelixMeasurement() const {
-  k4dtf::HelixMeasurement h;
+k4DTF::HelixMeasurement DTFTrack::toHelixMeasurement() const {
+  k4DTF::HelixMeasurement h;
   h.par = toEigen(par);
   for (int i = 0; i < 5; ++i)
     for (int j = 0; j < 5; ++j) h.cov(i, j) = covAt(i, j);

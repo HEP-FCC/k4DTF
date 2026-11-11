@@ -86,7 +86,7 @@ mass and primary-vertex constraints)
 
 | Column | Content |
 |---|---|
-| `<fit>_status`, `_chi2`, `_ndf`, `_nIter`, `_prob` | fit summary; status is the `k4dtf::ErrCode` bit pattern, 0 = success |
+| `<fit>_status`, `_chi2`, `_ndf`, `_nIter`, `_prob` | fit summary; status is the `k4DTF::ErrCode` bit pattern, 0 = success |
 | `<fit>_<L>_M`, `_MErr`, `_p{x,y,z}` | fitted mass, its uncertainty, momentum of every node |
 | `<fit>_<node>_vtx_{x,y,z}`, `_vtxErr_{x,y,z}` | fitted decay vertex of composite nodes [mm] |
 | `<fit>_<node>_ctau`, `_ctauErr`, `_L`, `_LErr` | proper decay length and decay length [mm]; composites with a lifetime only (not the D*) |

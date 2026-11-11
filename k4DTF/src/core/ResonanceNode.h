@@ -5,7 +5,7 @@
 
 #include "core/InternalParticleNode.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 class ResonanceNode : public InternalParticleNode {
 public:
@@ -25,4 +25,4 @@ public:
   ErrCode filter(const FitParams& reference, FitParams& params) const override;
 };
 
-} // namespace k4dtf
+} // namespace k4DTF

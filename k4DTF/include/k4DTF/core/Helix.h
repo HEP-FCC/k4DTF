@@ -5,7 +5,7 @@
 
 #include <Eigen/Dense>
 
-namespace k4dtf {
+namespace k4DTF {
 
 /// Helix parameters of a charged track, in the convention of
 /// edm4hep::TrackState as written by k4SimDelphes (Delphes TrkUtil):
@@ -85,4 +85,4 @@ Eigen::Matrix<double, 3, 5> momentumJacobian(const Vector5d& par, double Bz);
 Eigen::Matrix3d momentumCovariance(const Vector5d& par, const Matrix5d& cov, double Bz);
 
 }  // namespace helix
-}  // namespace k4dtf
+}  // namespace k4DTF

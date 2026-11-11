@@ -152,7 +152,7 @@ int main(int argc, char** argv) {
               << desc.toString() << "'\n";
     return 1;
   }
-  const k4dtf::DecayTreeFitter fitter;
+  const k4DTF::DecayTreeFitter fitter;
   const auto leafNodes = desc.leafNodes();
   const auto nLeaves = leafNodes.size();
 
@@ -232,7 +232,7 @@ int main(int argc, char** argv) {
     ++nEvents;
     const auto nCand = isCC.GetSize();
     const auto pv = k4DTF::DTFVertex::fromEDM4hep(*pvReco);
-    std::optional<k4dtf::InteractionPointInput> ip;
+    std::optional<k4DTF::InteractionPointInput> ip;
     if (opt.pv) ip = k4DTF::makeInteractionPoint(pv);
 
     for (std::size_t j = 0; j < nCand; ++j) {
@@ -277,11 +277,11 @@ int main(int argc, char** argv) {
         }
       }
 
-      k4dtf::FitResult r;
+      k4DTF::FitResult r;
       try {
         r = fitter.fit(k4DTF::makeDecayNodeInput(isCC[j] ? ccDesc : desc, leaves, opt.massConstraints), ip);
       } catch (const std::exception&) {
-        r.status = k4dtf::ErrCode::badsetup;
+        r.status = k4DTF::ErrCode::badsetup;
       }
       ++statusCount[static_cast<int>(r.status)];
       row.i["status"] = static_cast<int>(r.status);
@@ -349,7 +349,7 @@ int main(int argc, char** argv) {
 
   std::cout << "k4dtf-validate: " << nEvents << " events, " << nCands << " candidates (" << nSignal
             << " truth-matched) -> " << opt.output << "\n  fit status:";
-  for (const auto& [s, c] : statusCount) std::cout << " [" << static_cast<k4dtf::ErrCode>(s) << "] " << c;
+  for (const auto& [s, c] : statusCount) std::cout << " [" << static_cast<k4DTF::ErrCode>(s) << "] " << c;
   std::cout << "\n";
   return 0;
 }

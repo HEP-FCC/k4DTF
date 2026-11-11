@@ -14,7 +14,7 @@
 
 #include <vector>
 
-namespace k4dtf {
+namespace k4DTF {
 
 InternalParticleNode::InternalParticleNode(const DecayNodeInput& input,
                                            const ParticleNode* mother)
@@ -204,4 +204,4 @@ ErrCode InternalParticleNode::filter(const FitParams& reference, FitParams& para
   return status;
 }
 
-} // namespace k4dtf
+} // namespace k4DTF

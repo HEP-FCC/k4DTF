@@ -14,7 +14,7 @@
 #include "core/KalmanCalculator.h"
 #include "core/Projection.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 class ParticleNode {
 public:
@@ -122,4 +122,4 @@ private:
   std::vector<std::unique_ptr<ParticleNode>> m_daughters_owned;
 };
 
-} // namespace k4dtf
+} // namespace k4DTF

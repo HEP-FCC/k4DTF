@@ -17,7 +17,7 @@ namespace k4DTF {
 
 namespace {
 
-k4dtf::FitResult fitParticles(const RVecRCP& particles, const std::string& decayDesc, int motherPdg,
+k4DTF::FitResult fitParticles(const RVecRCP& particles, const std::string& decayDesc, int motherPdg,
                               float motherMass) {
   const auto desc = DecayDescriptor::fromString(decayDesc);
   std::vector<DTFParticle> leaves;
@@ -27,10 +27,10 @@ k4dtf::FitResult fitParticles(const RVecRCP& particles, const std::string& decay
     input.applyMassConstraint = true;
     input.massConstraintValue = motherMass;
   }
-  return k4dtf::DecayTreeFitter().fit(input);
+  return k4DTF::DecayTreeFitter().fit(input);
 }
 
-edm4hep::ReconstructedParticleData toEDM4hep(const k4dtf::NodeResult& n, float charge) {
+edm4hep::ReconstructedParticleData toEDM4hep(const k4DTF::NodeResult& n, float charge) {
   edm4hep::ReconstructedParticleData rp{};
   rp.PDG = n.pdgCode;
   rp.momentum = {static_cast<float>(n.p4(0)), static_cast<float>(n.p4(1)), static_cast<float>(n.p4(2))};
@@ -98,7 +98,7 @@ DTFRunner::DTFRunner(const CandidateBuilder& builder, std::vector<int> massConst
       m_cc(builder.ccDescriptor()),
       m_massConstraints(std::move(massConstraintPdgs)),
       m_pv(primaryVertexConstraint) {
-  k4dtf::DecayTreeFitter::Configuration cfg;
+  k4DTF::DecayTreeFitter::Configuration cfg;
   cfg.maxIter = maxIterations;
   m_fitter.setConfiguration(cfg);
 }
@@ -127,21 +127,21 @@ std::vector<DTFParticle> DTFRunner::inputs(const Candidates& c, std::size_t j, c
   return out;
 }
 
-k4dtf::DecayNodeInput DTFRunner::treeInput(const Candidates& c, std::size_t j, const Vec_rp& recos,
+k4DTF::DecayNodeInput DTFRunner::treeInput(const Candidates& c, std::size_t j, const Vec_rp& recos,
                                            const Vec_ts& tsPerReco, float Bz) const {
   return makeDecayNodeInput(c.isCC.at(j) ? m_cc : m_desc, inputs(c, j, recos, tsPerReco, Bz), m_massConstraints);
 }
 
 RVecFit DTFRunner::run(const Candidates& c, const Vec_rp& recos, const Vec_ts& tsPerReco, float Bz,
-                       const std::optional<k4dtf::InteractionPointInput>& pv) const {
+                       const std::optional<k4DTF::InteractionPointInput>& pv) const {
   RVecFit out;
   out.reserve(c.leaves.size());
   for (std::size_t j = 0; j < c.leaves.size(); ++j) {
     try {
       out.push_back(m_fitter.fit(treeInput(c, j, recos, tsPerReco, Bz), m_pv ? pv : std::nullopt));
     } catch (const std::exception&) {
-      k4dtf::FitResult failed;
-      failed.status = k4dtf::ErrCode::badsetup;
+      k4DTF::FitResult failed;
+      failed.status = k4DTF::ErrCode::badsetup;
       out.push_back(std::move(failed));
     }
   }
@@ -209,52 +209,52 @@ Vec_i fitNIter(const RVecFit& fits) {
 }
 
 Vec_f fitChi2(const RVecFit& fits) {
-  return perFit(fits, [](const k4dtf::FitResult& r) { return r.chi2; });
+  return perFit(fits, [](const k4DTF::FitResult& r) { return r.chi2; });
 }
 
 Vec_f fitProb(const RVecFit& fits) {
-  return perFit(fits, [](const k4dtf::FitResult& r) { return r.prob(); });
+  return perFit(fits, [](const k4DTF::FitResult& r) { return r.prob(); });
 }
 
 Vec_f fitNodeMass(const RVecFit& fits, int node) {
-  return perNode(fits, node, Needs::Nothing, [](const k4dtf::NodeResult& n) { return n.mass; });
+  return perNode(fits, node, Needs::Nothing, [](const k4DTF::NodeResult& n) { return n.mass; });
 }
 
 Vec_f fitNodeMassErr(const RVecFit& fits, int node) {
-  return perNode(fits, node, Needs::Nothing, [](const k4dtf::NodeResult& n) { return n.massErr; });
+  return perNode(fits, node, Needs::Nothing, [](const k4DTF::NodeResult& n) { return n.massErr; });
 }
 
 Vec_f fitNodeP(const RVecFit& fits, int node) {
-  return perNode(fits, node, Needs::Nothing, [](const k4dtf::NodeResult& n) { return n.p4.head<3>().norm(); });
+  return perNode(fits, node, Needs::Nothing, [](const k4DTF::NodeResult& n) { return n.p4.head<3>().norm(); });
 }
 
 Vec_f fitNodeMomentum(const RVecFit& fits, int node, int coord) {
-  return perNode(fits, node, Needs::Nothing, [coord](const k4dtf::NodeResult& n) { return n.p4(coord); });
+  return perNode(fits, node, Needs::Nothing, [coord](const k4DTF::NodeResult& n) { return n.p4(coord); });
 }
 
 Vec_f fitNodeDecayVertex(const RVecFit& fits, int node, int coord) {
-  return perNode(fits, node, Needs::Vertex, [coord](const k4dtf::NodeResult& n) { return n.decayVertex(coord); });
+  return perNode(fits, node, Needs::Vertex, [coord](const k4DTF::NodeResult& n) { return n.decayVertex(coord); });
 }
 
 Vec_f fitNodeDecayVertexErr(const RVecFit& fits, int node, int coord) {
   return perNode(fits, node, Needs::Vertex,
-                 [coord](const k4dtf::NodeResult& n) { return std::sqrt(n.decayVertexCov(coord, coord)); });
+                 [coord](const k4DTF::NodeResult& n) { return std::sqrt(n.decayVertexCov(coord, coord)); });
 }
 
 Vec_f fitNodeCtau(const RVecFit& fits, int node) {
-  return perNode(fits, node, Needs::Lifetime, [](const k4dtf::NodeResult& n) { return n.ctau; });
+  return perNode(fits, node, Needs::Lifetime, [](const k4DTF::NodeResult& n) { return n.ctau; });
 }
 
 Vec_f fitNodeCtauErr(const RVecFit& fits, int node) {
-  return perNode(fits, node, Needs::Lifetime, [](const k4dtf::NodeResult& n) { return n.ctauErr; });
+  return perNode(fits, node, Needs::Lifetime, [](const k4DTF::NodeResult& n) { return n.ctauErr; });
 }
 
 Vec_f fitNodeDecayLength(const RVecFit& fits, int node) {
-  return perNode(fits, node, Needs::Lifetime, [](const k4dtf::NodeResult& n) { return n.decayLength; });
+  return perNode(fits, node, Needs::Lifetime, [](const k4DTF::NodeResult& n) { return n.decayLength; });
 }
 
 Vec_f fitNodeDecayLengthErr(const RVecFit& fits, int node) {
-  return perNode(fits, node, Needs::Lifetime, [](const k4dtf::NodeResult& n) { return n.decayLengthErr; });
+  return perNode(fits, node, Needs::Lifetime, [](const k4DTF::NodeResult& n) { return n.decayLengthErr; });
 }
 
 }  // namespace k4DTF

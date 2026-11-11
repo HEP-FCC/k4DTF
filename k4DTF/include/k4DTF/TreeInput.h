@@ -11,7 +11,7 @@
 
 namespace k4DTF {
 
-/// Builds the input of k4dtf::DecayTreeFitter::fit() from a decay descriptor
+/// Builds the input of k4DTF::DecayTreeFitter::fit() from a decay descriptor
 /// and the measured final-state particles.
 ///
 /// - leaves: one DTFParticle per leaf of the descriptor, in depth-first leaf
@@ -27,10 +27,10 @@ namespace k4DTF {
 ///   nominal mass; a code also applies to its charge conjugate.
 ///
 /// FitResult::nodes is then in DecayDescriptor::flatten() order.
-k4dtf::DecayNodeInput makeDecayNodeInput(const DecayDescriptor& desc, const std::vector<DTFParticle>& leaves,
+k4DTF::DecayNodeInput makeDecayNodeInput(const DecayDescriptor& desc, const std::vector<DTFParticle>& leaves,
                                          const std::vector<int>& massConstraints = {});
 
 /// Primary vertex for the fitter.
-k4dtf::InteractionPointInput makeInteractionPoint(const DTFVertex& v);
+k4DTF::InteractionPointInput makeInteractionPoint(const DTFVertex& v);
 
 }  // namespace k4DTF

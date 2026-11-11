@@ -5,7 +5,7 @@
 
 #include <iostream>
 
-namespace k4dtf {
+namespace k4DTF {
 
 enum class ErrCode : unsigned int {
   success             = 0,
@@ -46,4 +46,4 @@ inline std::ostream& operator<<(std::ostream& os, ErrCode ec) {
   return os;
 }
 
-} // namespace k4dtf
+} // namespace k4DTF

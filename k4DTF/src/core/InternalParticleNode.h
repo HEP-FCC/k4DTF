@@ -5,7 +5,7 @@
 
 #include "core/ParticleNode.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 class InternalParticleNode : public ParticleNode {
 public:
@@ -37,4 +37,4 @@ protected:
   void seedVertex(FitParams* fitparams) const;
 };
 
-} // namespace k4dtf
+} // namespace k4DTF

@@ -9,7 +9,7 @@
 
 #include <Eigen/Dense>
 
-namespace k4dtf {
+namespace k4DTF {
 
 /// Helix parameters with covariance, see k4DTF/core/Helix.h for the conventions.
 struct HelixMeasurement {
@@ -74,4 +74,4 @@ using ParticleMeasurement = std::variant<TrackMeasurement, PhotonMeasurement,
                                          ResonanceMeasurement,
                                          MergedPi0Measurement>;
 
-} // namespace k4dtf
+} // namespace k4DTF

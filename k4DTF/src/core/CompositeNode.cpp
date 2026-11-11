@@ -6,7 +6,7 @@
 #include "core/FitParams.h"
 #include "core/Projection.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 CompositeNode::CompositeNode(const DecayNodeInput& input, const ParticleNode* mother)
     : ParticleNode(input.name, input.pdgCode, mother) {
@@ -76,4 +76,4 @@ double CompositeNode::chiSquare(const FitParams& fitparams) const {
   return p.chiSquare();
 }
 
-} // namespace k4dtf
+} // namespace k4DTF

@@ -49,7 +49,7 @@ float DTF_chi2_single(const RVecRCP& daughters, const std::string& decayDesc, in
 // Decay-tree fit of candidates built with k4DTF::CandidateBuilder
 // ---------------------------------------------------------------------------
 
-using RVecFit = ROOT::VecOps::RVec<k4dtf::FitResult>;
+using RVecFit = ROOT::VecOps::RVec<k4DTF::FitResult>;
 
 /// Fits every candidate once; extract quantities with the fit* functions
 /// below instead of refitting per output column.
@@ -76,7 +76,7 @@ public:
                                   const Vec_ts& tsPerReco, float Bz) const;
 
   /// Fitter input of candidate j.
-  k4dtf::DecayNodeInput treeInput(const Candidates& c, std::size_t j, const Vec_rp& recos, const Vec_ts& tsPerReco,
+  k4DTF::DecayNodeInput treeInput(const Candidates& c, std::size_t j, const Vec_rp& recos, const Vec_ts& tsPerReco,
                                   float Bz) const;
 
 private:
@@ -84,13 +84,13 @@ private:
   DecayDescriptor m_cc;
   std::vector<int> m_massConstraints;
   bool m_pv;
-  k4dtf::DecayTreeFitter m_fitter;
+  k4DTF::DecayTreeFitter m_fitter;
 
   RVecFit run(const Candidates& c, const Vec_rp& recos, const Vec_ts& tsPerReco, float Bz,
-              const std::optional<k4dtf::InteractionPointInput>& pv) const;
+              const std::optional<k4DTF::InteractionPointInput>& pv) const;
 };
 
-/// Fit status as the k4dtf::ErrCode bit pattern: 0 = success.
+/// Fit status as the k4DTF::ErrCode bit pattern: 0 = success.
 Vec_i fitStatus(const RVecFit& fits);
 Vec_f fitChi2(const RVecFit& fits);  ///< kInvalid unless converged
 Vec_i fitNdf(const RVecFit& fits);

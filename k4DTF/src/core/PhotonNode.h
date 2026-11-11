@@ -7,7 +7,7 @@
 
 #include "core/ParticleNode.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 /// Photon from a calorimeter cluster. Parameters: its momentum (px, py, pz);
 /// it is produced at its mother's vertex x and points at the cluster c.
@@ -49,4 +49,4 @@ private:
   int m_i1{2}, m_i2{0}, m_i3{1};  ///< running coordinate and the other two
 };
 
-} // namespace k4dtf
+} // namespace k4DTF

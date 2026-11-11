@@ -10,7 +10,7 @@
 #include "core/DecayChain.h"
 #include "core/FitParams.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 namespace {
 
@@ -158,7 +158,7 @@ FitResult DecayTreeFitter::fit(const DecayNodeInput& input,
     if (failure(status)) return finish(status, iter + 1);
 
     if (m_config.verbose > 0)
-      std::cout << "k4dtf::DecayTreeFitter iteration " << iter << " chi2 = " << chisq << " ndf = " << ndof << "\n";
+      std::cout << "k4DTF::DecayTreeFitter iteration " << iter << " chi2 = " << chisq << " ndf = " << ndof << "\n";
 
     if (iter > 0) {
       double dChisqConv =
@@ -187,4 +187,4 @@ FitResult DecayTreeFitter::fit(const DecayNodeInput& input,
   return finish(ErrCode::slowdivergingfit, m_config.maxIter);
 }
 
-} // namespace k4dtf
+} // namespace k4DTF

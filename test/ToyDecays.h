@@ -18,7 +18,7 @@
 #include "k4DTF/core/DecayNodeInput.h"
 #include "k4DTF/core/Helix.h"
 
-namespace k4dtf::toy {
+namespace k4DTF::toy {
 
 constexpr double kPi = 3.14159265358979323846;
 
@@ -258,4 +258,4 @@ inline void flatten(const Particle& p, std::vector<const Particle*>& out) {
   for (const auto& d : p.daughters) flatten(d, out);
 }
 
-}  // namespace k4dtf::toy
+}  // namespace k4DTF::toy

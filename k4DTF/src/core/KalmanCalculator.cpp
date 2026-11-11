@@ -3,7 +3,7 @@
 
 #include "core/KalmanCalculator.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 ErrCode KalmanCalculator::init(const Eigen::VectorXd& r, const Eigen::MatrixXd& H,
                                const FitParams& fitparams,
@@ -69,4 +69,4 @@ void KalmanCalculator::updateCov(FitParams& fitparams) {
   fitparams.cov() = 0.5 * (C + C.transpose());
 }
 
-} // namespace k4dtf
+} // namespace k4DTF

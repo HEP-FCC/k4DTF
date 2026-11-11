@@ -11,7 +11,7 @@
 #include "core/PhotonNode.h"
 #include "core/TrackNode.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 namespace {
 int countLeaves(const ParticleNode* node) {
@@ -88,4 +88,4 @@ ErrCode DecayChain::filter(FitParams& reference, FitParams& fitparams) const {
   return m_mother->filter(reference, fitparams);
 }
 
-} // namespace k4dtf
+} // namespace k4DTF

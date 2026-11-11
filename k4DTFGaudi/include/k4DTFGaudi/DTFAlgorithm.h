@@ -71,7 +71,7 @@ private:
       "Convergence criterion on delta chi2 (relative to max(1, ndf, chi2))"};
 
   std::unique_ptr<k4DTF::DecayDescriptor> m_descriptor;
-  k4dtf::DecayTreeFitter m_fitter;
+  k4DTF::DecayTreeFitter m_fitter;
 };
 
 }  // namespace k4DTF

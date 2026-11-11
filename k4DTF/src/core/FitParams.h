@@ -9,7 +9,7 @@
 
 #include "k4DTF/ChiSquare.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 class ParticleNode;
 
@@ -56,4 +56,4 @@ private:
   std::map<const ParticleNode*, ChiSquare> m_chiSquareMap;
 };
 
-} // namespace k4dtf
+} // namespace k4DTF

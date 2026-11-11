@@ -3,7 +3,7 @@
 
 #include "core/ResonanceNode.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 ResonanceNode::ResonanceNode(const DecayNodeInput& input, const ParticleNode* mother)
     : InternalParticleNode(input, mother) {}
@@ -40,4 +40,4 @@ ErrCode ResonanceNode::filter(const FitParams& reference, FitParams& params) con
   return status;
 }
 
-} // namespace k4dtf
+} // namespace k4DTF

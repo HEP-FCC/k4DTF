@@ -7,7 +7,7 @@
 
 #include "core/ParticleNode.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 class MergedPi0Node : public ParticleNode {
 public:
@@ -34,4 +34,4 @@ private:
   std::vector<double> m_clusterEnergies;
 };
 
-} // namespace k4dtf
+} // namespace k4DTF

@@ -8,7 +8,7 @@
 #include "k4DTF/ErrCode.h"
 #include "core/FitParams.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 class KalmanCalculator {
 public:
@@ -35,4 +35,4 @@ private:
   int              m_ierr{0};
 };
 
-} // namespace k4dtf
+} // namespace k4DTF

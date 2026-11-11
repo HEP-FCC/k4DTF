@@ -16,7 +16,7 @@
 using Catch::Matchers::WithinAbs;
 using namespace k4DTF;
 using namespace k4DTF::test;
-using k4dtf::FitResult;
+using k4DTF::FitResult;
 
 namespace {
 

@@ -9,7 +9,7 @@
 
 #include "core/ParticleNode.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 /// Charged final-state particle. Parameters: its momentum (px, py, pz) at the
 /// production vertex; the vertex position belongs to the mother.
@@ -45,4 +45,4 @@ private:
   std::optional<HelixMeasurement> m_helix;
 };
 
-} // namespace k4dtf
+} // namespace k4DTF

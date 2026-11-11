@@ -55,7 +55,7 @@ k4DTF/
 │
 ├── k4DTF/                                # Core library
 │   ├── include/k4DTF/
-│   │   ├── DecayTreeFitter.h             # Fitter (k4dtf namespace)
+│   │   ├── DecayTreeFitter.h             # Fitter
 │   │   ├── FitResult.h                   # chi2, status, per-node results
 │   │   ├── ErrCode.h, ChiSquare.h
 │   │   ├── core/DecayNodeInput.h         # Fitter input: tree of nodes
@@ -207,7 +207,7 @@ ctest --test-dir build --output-on-failure -j$(nproc) -V
 
 ### Core C++ library
 
-The fitter takes the decay tree as a `k4dtf::DecayNodeInput` (one node per
+The fitter takes the decay tree as a `k4DTF::DecayNodeInput` (one node per
 particle, measurements on the leaves) and an optional interaction point.
 From a decay descriptor and the measured final-state particles,
 `k4DTF::makeDecayNodeInput` builds it:
@@ -225,10 +225,10 @@ auto desc = k4DTF::DecayDescriptor::fromString("B- -> (D0 -> K- pi+) K-");
 std::vector<k4DTF::DTFParticle> leaves = {kaon1, pion, kaon2};
 
 auto input = k4DTF::makeDecayNodeInput(desc, leaves, /*mass constraints*/ {421});
-k4dtf::InteractionPointInput pv = k4DTF::makeInteractionPoint(primaryVertex);
+k4DTF::InteractionPointInput pv = k4DTF::makeInteractionPoint(primaryVertex);
 
-const k4dtf::DecayTreeFitter dtf;
-k4dtf::FitResult r = dtf.fit(input, pv);
+const k4DTF::DecayTreeFitter dtf;
+k4DTF::FitResult r = dtf.fit(input, pv);
 
 if (r.converged()) {
   std::cout << "chi2 / ndf = " << r.chi2 << " / " << r.ndf << ", prob " << r.prob() << "\n";
@@ -242,7 +242,7 @@ if (r.converged()) {
 - Composites that decay strongly or electromagnetically (D*, J/psi, ...) are
   resonances: no vertex or flight length of their own. Others get a decay
   vertex and a flight length from their production vertex.
-- Tracks are helix measurements (`k4dtf::HelixMeasurement`, conventions in
+- Tracks are helix measurements (`k4DTF::HelixMeasurement`, conventions in
   `k4DTF/core/Helix.h`, which are those of k4SimDelphes `TrackState`s); their
   mass hypothesis is the nominal mass of the descriptor's particle.
 - `FitResult::nodes` has, for every node: 4-momentum and covariance, mass and

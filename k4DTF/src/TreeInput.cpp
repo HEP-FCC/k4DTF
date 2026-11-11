@@ -18,10 +18,10 @@ bool constrained(int pdg, const std::vector<int>& list) {
   return std::any_of(list.begin(), list.end(), [&](int c) { return c == pdg || c == ParticleTable::chargeConjugate(pdg); });
 }
 
-k4dtf::DecayNodeInput build(const DecayDescriptor& desc, int node, const std::vector<DTFParticle>& leaves,
+k4DTF::DecayNodeInput build(const DecayDescriptor& desc, int node, const std::vector<DTFParticle>& leaves,
                             const std::vector<int>& massConstraints) {
   const auto& f = desc.flatten().at(node);
-  k4dtf::DecayNodeInput in;
+  k4DTF::DecayNodeInput in;
   in.pdgCode = f.pdg;
   in.name = f.name;
   in.mass = f.mass;
@@ -32,7 +32,7 @@ k4dtf::DecayNodeInput build(const DecayDescriptor& desc, int node, const std::ve
     if (p.charge == 0 && !p.hasTrack())
       throw std::invalid_argument("makeDecayNodeInput: neutral final-state particle '" + f.name +
                                   "' is not supported yet");
-    k4dtf::TrackMeasurement t;
+    k4DTF::TrackMeasurement t;
     t.charge = p.charge;
     t.momentum = {p.p4.Px(), p.p4.Py(), p.p4.Pz()};
     for (int i = 0; i < 3; ++i)
@@ -52,7 +52,7 @@ k4dtf::DecayNodeInput build(const DecayDescriptor& desc, int node, const std::ve
 
 }  // namespace
 
-k4dtf::DecayNodeInput makeDecayNodeInput(const DecayDescriptor& desc, const std::vector<DTFParticle>& leaves,
+k4DTF::DecayNodeInput makeDecayNodeInput(const DecayDescriptor& desc, const std::vector<DTFParticle>& leaves,
                                          const std::vector<int>& massConstraints) {
   if (leaves.size() != desc.nLeaves())
     throw std::invalid_argument("makeDecayNodeInput: " + std::to_string(leaves.size()) + " particles for " +
@@ -61,8 +61,8 @@ k4dtf::DecayNodeInput makeDecayNodeInput(const DecayDescriptor& desc, const std:
   return build(desc, 0, leaves, massConstraints);
 }
 
-k4dtf::InteractionPointInput makeInteractionPoint(const DTFVertex& v) {
-  k4dtf::InteractionPointInput ip;
+k4DTF::InteractionPointInput makeInteractionPoint(const DTFVertex& v) {
+  k4DTF::InteractionPointInput ip;
   ip.position = {v.position.X(), v.position.Y(), v.position.Z()};
   const int idx[3][3] = {{0, 1, 3}, {1, 2, 4}, {3, 4, 5}};
   for (int i = 0; i < 3; ++i)

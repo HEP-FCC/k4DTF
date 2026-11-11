@@ -8,7 +8,7 @@
 #include "core/FitParams.h"
 #include "core/Projection.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 PhotonNode::PhotonNode(const DecayNodeInput& input, const ParticleNode* mother)
     : ParticleNode(input.name, input.pdgCode, mother) {
@@ -106,4 +106,4 @@ ErrCode PhotonNode::filter(const FitParams& reference, FitParams& params) const 
   return applyConstraint(reference, params, 3, &PhotonNode::projectPhotonConstraint);
 }
 
-} // namespace k4dtf
+} // namespace k4DTF

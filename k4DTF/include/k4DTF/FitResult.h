@@ -13,7 +13,7 @@
 #include "k4DTF/ChiSquare.h"
 #include "k4DTF/ErrCode.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 class DecayChain;
 class FitParams;
@@ -89,4 +89,4 @@ private:
   std::any m_fitContext;
 };
 
-} // namespace k4dtf
+} // namespace k4DTF

@@ -7,7 +7,7 @@
 
 #include "core/ParticleNode.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 class InteractionPointNode : public ParticleNode {
 public:
@@ -31,4 +31,4 @@ private:
   Eigen::Matrix3d m_ipCov;
 };
 
-} // namespace k4dtf
+} // namespace k4DTF

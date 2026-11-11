@@ -12,7 +12,7 @@
 #include "core/ParticleNode.h"
 #include "k4DTF/ErrCode.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 class FitParams;
 
@@ -61,4 +61,4 @@ private:
   int m_nFinalState{0};
 };
 
-} // namespace k4dtf
+} // namespace k4DTF

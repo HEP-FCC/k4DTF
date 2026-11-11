@@ -19,7 +19,7 @@ namespace k4DTF {
 
 /// Helix parameters of a charged track at a reference point, with ROOT types
 /// for analysis code. The conventions and formulae are those of
-/// k4dtf::helix (k4DTF/core/Helix.h), used by the fitter.
+/// k4DTF::helix (k4DTF/core/Helix.h), used by the fitter.
 ///
 /// Parameters and units follow edm4hep::TrackState as written by k4SimDelphes
 /// (Delphes IDEA card):
@@ -62,8 +62,8 @@ struct DTFTrack {
   static DTFTrack fromEDM4hep(const edm4hep::TrackState& ts, double Bz);
   edm4hep::TrackState toEDM4hep() const;
 
-  /// Measurement for the fitter (k4dtf::TrackMeasurement::helix).
-  k4dtf::HelixMeasurement toHelixMeasurement() const;
+  /// Measurement for the fitter (k4DTF::TrackMeasurement::helix).
+  k4DTF::HelixMeasurement toHelixMeasurement() const;
 
   /// Exact helix of a particle produced at x [mm] with momentum p [GeV] and
   /// the given charge, reference point (0, 0, 0). Same formulae as Delphes

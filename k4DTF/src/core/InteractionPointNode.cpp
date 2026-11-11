@@ -6,7 +6,7 @@
 #include "core/FitParams.h"
 #include "core/Projection.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 InteractionPointNode::InteractionPointNode(const Eigen::Vector3d& pos,
                                            const Eigen::Matrix3d& cov)
@@ -62,4 +62,4 @@ ErrCode InteractionPointNode::filter(const FitParams& reference, FitParams& para
   return applyConstraint(reference, params, 3, &InteractionPointNode::projectIPConstraint);
 }
 
-} // namespace k4dtf
+} // namespace k4DTF

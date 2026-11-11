@@ -10,7 +10,7 @@
 
 #include "k4DTF/core/ParticleMeasurement.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 /// One node of the decay tree given to DecayTreeFitter::fit().
 ///
@@ -41,4 +41,4 @@ struct InteractionPointInput {
   Eigen::Matrix3d cov;
 };
 
-} // namespace k4dtf
+} // namespace k4DTF

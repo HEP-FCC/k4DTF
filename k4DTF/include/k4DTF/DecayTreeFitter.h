@@ -9,7 +9,7 @@
 #include "k4DTF/FitResult.h"
 #include "k4DTF/core/DecayNodeInput.h"
 
-namespace k4dtf {
+namespace k4DTF {
 
 class DecayTreeFitter {
 public:
@@ -34,4 +34,4 @@ private:
   Configuration m_config;
 };
 
-} // namespace k4dtf
+} // namespace k4DTF

@@ -5,7 +5,7 @@
 
 #include <Eigen/Dense>
 
-namespace k4dtf {
+namespace k4DTF {
 
 class Projection {
 public:
@@ -52,4 +52,4 @@ private:
   unsigned int    m_offset{0};
 };
 
-} // namespace k4dtf
+} // namespace k4DTF

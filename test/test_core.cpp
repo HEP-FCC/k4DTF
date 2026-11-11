@@ -16,7 +16,7 @@
 #include "k4DTF/TreeInput.h"
 
 using Catch::Matchers::WithinAbs;
-using namespace k4dtf;
+using namespace k4DTF;
 using namespace k4DTF;
 
 // ---------------------------------------------------------------------------
