@@ -108,6 +108,56 @@ Vec_ts trackStatePerReco(const Vec_rp& recos, const Vec_i& rpTrackIdx, const Vec
 
 float firstOr(const Vec_f& v, float def) { return v.empty() ? def : v[0]; }
 
+Vec_cl photonClusterPerReco(const Vec_rp& recos, const Vec_i& rpClusterIdx, const Vec_cl& photonClusters,
+                            const CalorimeterResolution& calo, bool modelErrors) {
+  edm4hep::ClusterData none{};
+  none.type = kNoCluster;
+  Vec_cl out(recos.size(), none);
+  auto nonZero = [](const edm4hep::Vector3f& v) { return v.x != 0 || v.y != 0 || v.z != 0; };
+
+  for (std::size_t i = 0; i < recos.size(); ++i) {
+    const auto& rp = recos[i];
+    if (rp.charge != 0 || rp.energy <= 0) continue;
+
+    const edm4hep::ClusterData* cl = nullptr;
+    if (rp.clusters_begin < rp.clusters_end && rp.clusters_begin < rpClusterIdx.size()) {
+      const int k = rpClusterIdx[rp.clusters_begin];
+      if (k >= 0 && static_cast<std::size_t>(k) < photonClusters.size() &&
+          std::abs(photonClusters[k].energy - rp.energy) <= 1e-5f * std::max(rp.energy, 1.f))
+        cl = &photonClusters[k];
+    }
+    if (!cl && rp.PDG != 22) continue;
+
+    edm4hep::ClusterData c{};
+    c.type = cl ? cl->type : 0;
+    c.energy = rp.energy;
+
+    Eigen::Vector3d pos;
+    if (cl && nonZero(cl->position)) {
+      pos = {cl->position.x, cl->position.y, cl->position.z};
+    } else if (nonZero(rp.referencePoint)) {
+      pos = {rp.referencePoint.x, rp.referencePoint.y, rp.referencePoint.z};
+    } else {
+      pos = calo.frontFace({rp.momentum.x, rp.momentum.y, rp.momentum.z});
+    }
+    c.position = {static_cast<float>(pos.x()), static_cast<float>(pos.y()), static_cast<float>(pos.z())};
+
+    const bool hasCov = cl && !modelErrors && std::any_of(std::begin(cl->positionError.values), std::end(cl->positionError.values),
+                                          [](float v) { return v != 0; });
+    if (hasCov) {
+      c.positionError = cl->positionError;
+    } else {
+      const auto cov = calo.positionCovariance(pos);
+      for (int a = 0; a < 3; ++a)
+        for (int b = 0; b <= a; ++b) c.positionError[a * (a + 1) / 2 + b] = static_cast<float>(cov(a, b));
+    }
+    c.energyError = (cl && !modelErrors && cl->energyError > 0) ? cl->energyError
+                                                 : static_cast<float>(std::sqrt(calo.energyVariance(rp.energy)));
+    out[i] = c;
+  }
+  return out;
+}
+
 Vec_i signalPID(const Vec_i& pid, const Vec_i& recoMC, const Vec_mc& mc, const Vec_i& mcParents, int headPdg) {
   const int nMC = static_cast<int>(mc.size());
   const int head = std::abs(headPdg);
@@ -280,6 +330,18 @@ Vec_ts leafTrackStates(const Candidates& c, const Vec_ts& tsPerReco, int leaf) {
   Vec_ts out;
   out.reserve(c.leaves.size());
   for (const auto& cand : c.leaves) out.push_back(tsPerReco.at(cand.at(leaf)));
+  return out;
+}
+
+Vec_cl leafClusters(const Candidates& c, const Vec_cl& clusterPerReco, int leaf) {
+  edm4hep::ClusterData none{};
+  none.type = kNoCluster;
+  Vec_cl out;
+  out.reserve(c.leaves.size());
+  for (const auto& cand : c.leaves) {
+    const int idx = cand.at(leaf);
+    out.push_back(idx >= 0 && static_cast<std::size_t>(idx) < clusterPerReco.size() ? clusterPerReco[idx] : none);
+  }
   return out;
 }
 

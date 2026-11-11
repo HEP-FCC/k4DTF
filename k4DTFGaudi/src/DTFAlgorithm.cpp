@@ -11,8 +11,11 @@
 #include "k4DTF/DTFParticle.h"
 #include "k4DTF/FitResult.h"
 #include "k4DTF/TreeInput.h"
+#include "edm4hep/ClusterCollection.h"
 #include "edm4hep/TrackCollection.h"
+#include "k4DTF/CalorimeterResolution.h"
 
+#include <cmath>
 #include <map>
 
 namespace k4DTF {
@@ -79,7 +82,9 @@ void setConstraintMasses(k4DTF::DecayNodeInput& in, const std::map<int, double>&
 // ---------------------------------------------------------------------------
 // The input collection holds the final-state particles of one candidate, in
 // the depth-first leaf order of the decay descriptor. Charged particles are
-// fitted with the first track state of their first track.
+// fitted with the first track state of their first track, photons (neutral,
+// with a cluster) with their first cluster. Cluster errors that are not set
+// (zero) are taken from k4DTF::CalorimeterResolution (IDEA defaults).
 std::tuple<edm4hep::ReconstructedParticleCollection,
            edm4hep::VertexCollection>
 DTFAlgorithm::operator()(
@@ -99,10 +104,29 @@ DTFAlgorithm::operator()(
     data.PDG       = rp.getPDG();
     data.covMatrix = rp.getCovMatrix();
     const auto tracks = rp.getTracks();
-    if (!tracks.empty() && !tracks[0].getTrackStates().empty())
+    const auto clusters = rp.getClusters();
+    if (!tracks.empty() && !tracks[0].getTrackStates().empty()) {
       leaves.push_back(k4DTF::DTFParticle::fromEDM4hep(data, tracks[0].getTrackStates()[0], m_Bz));
-    else
+    } else if (data.charge == 0 && !clusters.empty()) {
+      const k4DTF::CalorimeterResolution calo;
+      const auto cl = clusters[0];
+      edm4hep::ClusterData c{};
+      c.energy = cl.getEnergy();
+      c.energyError = cl.getEnergyError() > 0 ? cl.getEnergyError()
+                                              : static_cast<float>(std::sqrt(calo.energyVariance(c.energy)));
+      c.position = cl.getPosition();
+      c.positionError = cl.getPositionError();
+      bool hasCov = false;
+      for (int i = 0; i < 6; ++i) hasCov |= c.positionError[i] != 0;
+      if (!hasCov) {
+        const auto cov = calo.positionCovariance({c.position.x, c.position.y, c.position.z});
+        for (int a = 0; a < 3; ++a)
+          for (int b = 0; b <= a; ++b) c.positionError[a * (a + 1) / 2 + b] = static_cast<float>(cov(a, b));
+      }
+      leaves.push_back(k4DTF::DTFParticle::fromEDM4hep(data, c));
+    } else {
       leaves.push_back(k4DTF::DTFParticle::fromEDM4hep(data));
+    }
   }
 
   std::vector<int> constrained;

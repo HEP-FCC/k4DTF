@@ -10,6 +10,7 @@
 #include "Math/Point3D.h"
 #include "Math/Vector3D.h"
 #include "Math/Vector4D.h"
+#include "edm4hep/ClusterData.h"
 #include "edm4hep/ReconstructedParticleData.h"
 #include "edm4hep/TrackState.h"
 #include "edm4hep/VertexData.h"
@@ -73,6 +74,28 @@ struct DTFTrack {
                                        double charge, double Bz);
 };
 
+/// A photon's calorimeter cluster: position [mm] with covariance, energy
+/// [GeV] with its error, as in edm4hep::Cluster. The fitter assumes the
+/// photon flies from its production vertex to the cluster position.
+struct DTFCluster {
+  ROOT::Math::XYZPoint position{};    // [mm]
+  std::array<double, 6> positionCov{};  // lower triangle (xx, yx, yy, zx, zy, zz) [mm^2]
+  double energy{0.0};                 // [GeV]
+  double energyError{0.0};            // [GeV]
+
+  /// Momentum of a massless particle from the origin to the cluster.
+  ROOT::Math::XYZVector momentum() const;
+
+  /// (px, py, pz, E) covariance of momentum(); 10-element lower triangle.
+  std::array<double, 10> p4Covariance() const;
+
+  static DTFCluster fromEDM4hep(const edm4hep::ClusterData& c);
+  edm4hep::ClusterData toEDM4hep() const;
+
+  /// Measurement for the fitter.
+  k4DTF::PhotonMeasurement toPhotonMeasurement() const;
+};
+
 /// A vertex with position covariance, e.g. the primary vertex.
 struct DTFVertex {
   ROOT::Math::XYZPoint position{};  // [mm]
@@ -97,11 +120,13 @@ struct DTFParticle {
   int pdg{0};
   std::string name;
   std::optional<DTFTrack> track;  ///< set for charged final-state particles
+  std::optional<DTFCluster> cluster;  ///< set for photons
 
   /// Invariant mass from the 4-momentum.
   double mass() const { return p4.M(); }
 
   bool hasTrack() const { return track.has_value(); }
+  bool hasCluster() const { return cluster.has_value(); }
 
   /// Keep the 3-momentum, set E = sqrt(p^2 + m^2). If a track is attached,
   /// cov is recomputed for the new mass.
@@ -116,6 +141,12 @@ struct DTFParticle {
   /// propagated from the track covariance.
   static DTFParticle fromEDM4hep(const edm4hep::ReconstructedParticleData& rp, const edm4hep::TrackState& ts,
                                  double Bz, double massHypothesis = -1.0);
+
+  /// Construct a photon from its reconstructed particle and cluster (see
+  /// photonClusterPerReco() in k4DTFFCCAnalyses for Delphes files). The
+  /// 4-momentum points from the origin to the cluster, with the cluster
+  /// energy; its covariance is propagated from the cluster if rp has none.
+  static DTFParticle fromEDM4hep(const edm4hep::ReconstructedParticleData& rp, const edm4hep::ClusterData& cl);
 
   /// Convert back to an EDM4hep reconstructed particle data struct.
   edm4hep::ReconstructedParticleData toEDM4hep() const;

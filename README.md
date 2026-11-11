@@ -63,7 +63,8 @@ k4DTF/
 │   │   ├── core/Helix.h                  # Helix conventions and helpers
 │   │   ├── DecayDescriptor.h             # Descriptor parser (nested decays, pre-order nodes)
 │   │   ├── ParticleTable.h               # Particle names, PDG codes, masses, resonances
-│   │   ├── DTFParticle.h                 # Particle + track with ROOT/EDM4hep conversions
+│   │   ├── DTFParticle.h                 # Particle + track/cluster with ROOT/EDM4hep conversions
+│   │   ├── CalorimeterResolution.h       # Photon errors for clusters without them (IDEA defaults)
 │   │   └── TreeInput.h                   # Descriptor + particles -> DecayNodeInput
 │   └── src/
 │       ├── DecayTreeFitter.cpp           # Iteration, result extraction
@@ -245,6 +246,10 @@ if (r.converged()) {
 - Tracks are helix measurements (`k4DTF::HelixMeasurement`, conventions in
   `k4DTF/core/Helix.h`, which are those of k4SimDelphes `TrackState`s); their
   mass hypothesis is the nominal mass of the descriptor's particle.
+- Photons are calorimeter clusters (`k4DTF::DTFCluster`: position, energy and
+  their errors); the photon flies from its mother's vertex (for a pi0, the
+  vertex where the pi0 is made) to the cluster. `k4DTF::CalorimeterResolution`
+  supplies errors for clusters without them (Delphes IDEA defaults).
 - `FitResult::nodes` has, for every node: 4-momentum and covariance, mass and
   error, decay vertex and covariance, flight length and c*tau with errors.
 

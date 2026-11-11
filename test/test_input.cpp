@@ -14,6 +14,7 @@
 #include "k4DTFFCCAnalyses/DTFInput.h"
 
 using Catch::Matchers::WithinAbs;
+using Catch::Matchers::WithinRel;
 using namespace k4DTF;
 using namespace k4DTF::test;
 using k4DTF::FitResult;
@@ -270,4 +271,137 @@ TEST_CASE("DTFRunner fits the signal candidate", "[input]") {
   // the D* is a resonance: it decays at the B vertex, no lifetime
   CHECK_THAT(fitNodeDecayVertex(fits, 1, 1)[j], WithinAbs(p.chain.bVertex.Y(), 1e-4));
   CHECK(fitNodeCtau(fits, 1)[j] == kInvalid);
+}
+
+// ---------------------------------------------------------------------------
+// Photons
+// ---------------------------------------------------------------------------
+
+namespace {
+
+const char* kBuPi0 = "B- -> (D0 -> K- pi+ (pi0 -> gamma gamma)) pi-";
+
+struct PreparedPi0 {
+  SyntheticEvent ev;
+  BuPi0Chain chain{};
+  Vec_i recoMC, pid;
+  Vec_ts ts;
+  Vec_cl clusters;
+  std::vector<int> recoOf;
+  int kl{-1};  // reco index of a neutral hadron
+};
+
+PreparedPi0 makePi0Event(SyntheticEvent::Clusters style) {
+  PreparedPi0 p;
+  p.ev.clusterStyle = style;
+  const ROOT::Math::XYZPoint pv(-0.002, 2e-5, -0.3);
+  const int z = addZ(p.ev, pv);
+  p.chain = addBuPi0Chain(p.ev, z, pv);
+  const int bkgGamma = p.ev.addMC(22, {0.3, -0.8, 0.4, std::sqrt(0.89)}, pv, z);
+  const int bkgKL = p.ev.addMC(130, {1.0, 1.0, -0.5, std::sqrt(2.25 + 0.2476)}, pv, z);
+  p.ev.finalise();
+  p.recoOf.assign(p.ev.mc.size(), -1);
+  // the neutral hadron first, so that cluster indices of both collections overlap
+  p.kl = p.recoOf[bkgKL] = p.ev.addReco(bkgKL);
+  for (int m : {p.chain.K, p.chain.piD0, p.chain.g1, p.chain.g2, p.chain.piB, bkgGamma})
+    p.recoOf[m] = p.ev.addReco(m);
+  p.recoMC = recoToMC(p.ev.recos, p.ev.linkFrom, p.ev.linkTo);
+  p.pid = truthPDG(p.recoMC, p.ev.mc);
+  p.ts = trackStatePerReco(p.ev.recos, p.ev.rpTracks, p.ev.tracks, p.ev.trackStates);
+  p.clusters = photonClusterPerReco(p.ev.recos, p.ev.rpClusters, p.ev.photonClusters);
+  return p;
+}
+
+}  // namespace
+
+TEST_CASE("Photon clusters per reco: k4SimDelphes v00-09 clusters are used as written", "[input][photon]") {
+  const auto p = makePi0Event(SyntheticEvent::Clusters::WithPosition);
+  REQUIRE(p.clusters.size() == p.ev.recos.size());
+  // charged particles and the neutral hadron have no photon cluster
+  CHECK(p.clusters[p.recoOf[p.chain.K]].type == kNoCluster);
+  CHECK(p.clusters[p.kl].type == kNoCluster);
+
+  const int g = p.recoOf[p.chain.g1];
+  const auto& written = p.ev.photonClusters[p.ev.rpClusters[p.ev.recos[g].clusters_begin]];
+  const auto& c = p.clusters[g];
+  CHECK(c.type != kNoCluster);
+  CHECK(c.position.x == written.position.x);
+  CHECK(c.position.z == written.position.z);
+  for (int i = 0; i < 6; ++i) CHECK(c.positionError[i] == written.positionError[i]);
+  CHECK(c.energyError == written.energyError);
+  CHECK(c.energy == p.ev.recos[g].energy);
+}
+
+TEST_CASE("Photon clusters per reco: older files get position and errors from the calorimeter model",
+          "[input][photon]") {
+  const auto p = makePi0Event(SyntheticEvent::Clusters::EnergyOnly);
+  const CalorimeterResolution calo;
+  const int g = p.recoOf[p.chain.g2];
+  const auto& rp = p.ev.recos[g];
+  const auto& c = p.clusters[g];
+  REQUIRE(c.type != kNoCluster);
+  // front face along the photon direction from the origin
+  const Eigen::Vector3d x = calo.frontFace({rp.momentum.x, rp.momentum.y, rp.momentum.z});
+  CHECK_THAT(c.position.x, WithinAbs(x.x(), 1e-2));
+  CHECK_THAT(c.position.y, WithinAbs(x.y(), 1e-2));
+  CHECK_THAT(c.position.z, WithinAbs(x.z(), 1e-2));
+  CHECK((std::abs(std::hypot(c.position.x, c.position.y) - calo.radius) < 0.1 ||
+         std::abs(std::abs(c.position.z) - calo.halfLength) < 0.1));
+  const auto cov = calo.positionCovariance(x);
+  CHECK_THAT(c.positionError[0], WithinRel(cov(0, 0), 1e-5));
+  CHECK_THAT(c.positionError[5], WithinRel(cov(2, 2), 1e-5));
+  CHECK_THAT(c.energyError, WithinRel(std::sqrt(calo.energyVariance(rp.energy)), 1e-5));
+  CHECK(p.clusters[p.kl].type == kNoCluster);
+}
+
+TEST_CASE("DTFRunner fits B- -> (D0 -> K- pi+ (pi0 -> gamma gamma)) pi- with photon clusters",
+          "[input][photon]") {
+  const auto p = makePi0Event(SyntheticEvent::Clusters::WithPosition);
+  const CandidateBuilder b(kBuPi0, {{521, {4.9, 5.7}}, {421, {1.80, 1.93}}, {111, {0.10, 0.17}}});
+  const auto cands = b(p.ev.recos, p.pid);
+  const auto truth = TruthMatcher(b)(cands, p.recoMC, p.ev.mc, p.ev.mcParents, p.ev.mcDaughters);
+  const int j = signalIndex(truth);
+  REQUIRE(j >= 0);
+  // node 4 is the pi0
+  CHECK(truth.nodeMC[j][4] == p.chain.pi0);
+  CHECK(leafClusters(cands, p.clusters, 2)[j].type != kNoCluster);
+  CHECK(leafClusters(cands, p.clusters, 0)[j].type == kNoCluster);
+
+  const DTFRunner runner(b, {421, 111}, true);
+  const auto inputs = runner.inputs(cands, j, p.ev.recos, p.ts, p.ev.Bz, p.clusters);
+  REQUIRE(inputs.size() == 5);
+  CHECK(inputs[2].hasCluster());
+  CHECK(!inputs[2].hasTrack());
+  CHECK(inputs[0].hasTrack());
+
+  edm4hep::VertexData pv{};
+  pv.position = {float(p.chain.pv.X()), float(p.chain.pv.Y()), float(p.chain.pv.Z())};
+  pv.covMatrix[0] = 2e-5f;
+  pv.covMatrix[2] = 1e-8f;
+  pv.covMatrix[5] = 0.09f;
+  const auto fits = runner(cands, p.ev.recos, p.ts, p.clusters, p.ev.Bz, pv);
+  REQUIRE(fits[j].converged());
+  // 15 helix + 6 photon + 3 PV + 2 masses - 4 (B) - 1 (D0 flight) - 15 momenta
+  CHECK(fitNdf(fits)[j] == 6);
+  // exact tracks and cluster positions; the cluster energies are exact too
+  CHECK(fitChi2(fits)[j] < 1e-3);
+  CHECK_THAT(fitNodeMass(fits, 4)[j], WithinAbs(ParticleTable::mass(111), 1e-5));
+  CHECK_THAT(fitNodeDecayVertex(fits, 1, 0)[j], WithinAbs(p.chain.dVertex.X(), 1e-3));
+  CHECK_THAT(fitNodeCtau(fits, 1)[j], WithinAbs(0.123, 1e-3));
+
+  // without clusters the photons cannot be fitted
+  const auto noClusters = runner(cands, p.ev.recos, p.ts, p.ev.Bz, pv);
+  CHECK(!noClusters[j].converged());
+}
+
+TEST_CASE("Photon clusters per reco: model errors replace the file's on request", "[input][photon]") {
+  auto p = makePi0Event(SyntheticEvent::Clusters::WithPosition);
+  const CalorimeterResolution calo;
+  const auto model = photonClusterPerReco(p.ev.recos, p.ev.rpClusters, p.ev.photonClusters, calo, true);
+  const int g = p.recoOf[p.chain.g1];
+  // the position is still the cluster's
+  CHECK(model[g].position.x == p.clusters[g].position.x);
+  // the file has tower size / sqrt(12): half the variance of the model
+  CHECK_THAT(model[g].positionError[0], WithinRel(2.0 * p.clusters[g].positionError[0], 1e-4));
+  CHECK_THAT(model[g].positionError[5], WithinRel(2.0 * p.clusters[g].positionError[5], 1e-4));
 }

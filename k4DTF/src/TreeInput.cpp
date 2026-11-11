@@ -29,9 +29,15 @@ k4DTF::DecayNodeInput build(const DecayDescriptor& desc, int node, const std::ve
   if (f.isLeaf()) {
     const auto& p = leaves.at(f.leafIndex);
     if (in.mass < 0) in.mass = p.mass();
+    if (p.hasCluster() && !p.hasTrack()) {
+      if (p.cluster->energy <= 0)
+        throw std::invalid_argument("makeDecayNodeInput: cluster of '" + f.name + "' has no energy");
+      in.measurement = p.cluster->toPhotonMeasurement();
+      return in;
+    }
     if (p.charge == 0 && !p.hasTrack())
       throw std::invalid_argument("makeDecayNodeInput: neutral final-state particle '" + f.name +
-                                  "' is not supported yet");
+                                  "' needs a calorimeter cluster (DTFParticle::cluster)");
     k4DTF::TrackMeasurement t;
     t.charge = p.charge;
     t.momentum = {p.p4.Px(), p.p4.Py(), p.p4.Pz()};

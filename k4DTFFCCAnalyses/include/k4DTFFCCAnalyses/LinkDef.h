@@ -23,11 +23,13 @@
 #pragma link C++ function k4DTF::trackStatePerReco;
 #pragma link C++ function k4DTF::firstOr;
 #pragma link C++ function k4DTF::signalPID;
+#pragma link C++ function k4DTF::photonClusterPerReco;
 #pragma link C++ function k4DTF::nCandidates;
 #pragma link C++ function k4DTF::selectCandidates;
 #pragma link C++ function k4DTF::leafRecoIndex;
 #pragma link C++ function k4DTF::leafParticles;
 #pragma link C++ function k4DTF::leafTrackStates;
+#pragma link C++ function k4DTF::leafClusters;
 #pragma link C++ function k4DTF::nodeMass;
 #pragma link C++ function k4DTF::nLeavesInPV;
 #pragma link C++ function k4DTF::nodeMCParticle;

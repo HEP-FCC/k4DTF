@@ -112,6 +112,66 @@ DTFTrack DTFTrack::fromPositionMomentum(const ROOT::Math::XYZPoint& x, const ROO
 // DTFVertex
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// DTFCluster
+// ---------------------------------------------------------------------------
+
+ROOT::Math::XYZVector DTFCluster::momentum() const {
+  const ROOT::Math::XYZVector d = position - ROOT::Math::XYZPoint();
+  const double r = std::sqrt(d.Mag2());
+  return r > 0 ? d * (energy / r) : ROOT::Math::XYZVector();
+}
+
+std::array<double, 10> DTFCluster::p4Covariance() const {
+  // p = E x / |x|: dp/dx = E (1 - n n^T) / |x|, dp/dE = n; E has variance energyError^2
+  std::array<double, 10> out{};
+  const Eigen::Vector3d x(position.X(), position.Y(), position.Z());
+  const double r = x.norm();
+  if (r <= 0) return out;
+  const Eigen::Vector3d n = x / r;
+  Eigen::Matrix<double, 4, 4> J = Eigen::Matrix<double, 4, 4>::Zero();  // d(px,py,pz,E)/d(x,y,z,E)
+  J.topLeftCorner<3, 3>() = energy / r * (Eigen::Matrix3d::Identity() - n * n.transpose());
+  J.block<3, 1>(0, 3) = n;
+  J(3, 3) = 1;
+  Eigen::Matrix4d C = Eigen::Matrix4d::Zero();
+  for (int i = 0; i < 3; ++i)
+    for (int j = 0; j < 3; ++j) C(i, j) = positionCov[lowerTri(i, j)];
+  C(3, 3) = energyError * energyError;
+  const Eigen::Matrix4d P = J * C * J.transpose();
+  for (int i = 0; i < 4; ++i)
+    for (int j = 0; j <= i; ++j) out[lowerTri(i, j)] = P(i, j);
+  return out;
+}
+
+DTFCluster DTFCluster::fromEDM4hep(const edm4hep::ClusterData& c) {
+  DTFCluster out;
+  out.position = {c.position.x, c.position.y, c.position.z};
+  for (int i = 0; i < 6; ++i) out.positionCov[i] = c.positionError[i];
+  out.energy = c.energy;
+  out.energyError = c.energyError;
+  return out;
+}
+
+edm4hep::ClusterData DTFCluster::toEDM4hep() const {
+  edm4hep::ClusterData c{};
+  c.position = {static_cast<float>(position.X()), static_cast<float>(position.Y()), static_cast<float>(position.Z())};
+  for (int i = 0; i < 6; ++i) c.positionError[i] = static_cast<float>(positionCov[i]);
+  c.energy = static_cast<float>(energy);
+  c.energyError = static_cast<float>(energyError);
+  return c;
+}
+
+k4DTF::PhotonMeasurement DTFCluster::toPhotonMeasurement() const {
+  k4DTF::PhotonMeasurement m;
+  m.clusterPos = {position.X(), position.Y(), position.Z()};
+  m.energy = energy;
+  m.cov.setZero();
+  for (int i = 0; i < 3; ++i)
+    for (int j = 0; j < 3; ++j) m.cov(i, j) = positionCov[lowerTri(i, j)];
+  m.cov(3, 3) = energyError * energyError;
+  return m;
+}
+
 DTFVertex DTFVertex::fromEDM4hep(const edm4hep::VertexData& v) {
   DTFVertex out;
   out.position = {v.position.x, v.position.y, v.position.z};
@@ -146,6 +206,17 @@ DTFParticle DTFParticle::fromEDM4hep(const edm4hep::ReconstructedParticleData& r
   if (massHypothesis > 0) dp.setMassHypothesis(massHypothesis);
   const bool noCov = std::all_of(dp.cov.begin(), dp.cov.end(), [](double c) { return c == 0.0; });
   if (noCov) dp.cov = dp.track->p4Covariance(m);
+  return dp;
+}
+
+DTFParticle DTFParticle::fromEDM4hep(const edm4hep::ReconstructedParticleData& rp,
+                                     const edm4hep::ClusterData& cl) {
+  DTFParticle dp = fromEDM4hep(rp);
+  dp.cluster = DTFCluster::fromEDM4hep(cl);
+  const auto p = dp.cluster->momentum();
+  if (p.Mag2() > 0) dp.p4.SetPxPyPzE(p.X(), p.Y(), p.Z(), dp.cluster->energy);
+  const bool noCov = std::all_of(dp.cov.begin(), dp.cov.end(), [](double c) { return c == 0.0; });
+  if (noCov) dp.cov = dp.cluster->p4Covariance();
   return dp;
 }
 

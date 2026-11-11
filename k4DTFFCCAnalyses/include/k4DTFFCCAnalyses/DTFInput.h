@@ -17,6 +17,8 @@
 /// Column names for EDM4hep v1 files from k4SimDelphes (check with podio-dump):
 ///   ReconstructedParticles                     RVec<ReconstructedParticleData>
 ///   _ReconstructedParticles_tracks.index       reco -> EFlowTrack
+///   _ReconstructedParticles_clusters.index     reco -> EFlowPhoton / EFlowNeutralHadron
+///   EFlowPhoton                                RVec<ClusterData> (photon clusters)
 ///   EFlowTrack, _EFlowTrack_trackStates        RVec<TrackData>, RVec<TrackState>
 ///   _RecoMCLink_from.index, _RecoMCLink_to.index   reco <-> MC links
 ///   Particle, _Particle_parents.index, _Particle_daughters.index
@@ -28,11 +30,13 @@
 #include <vector>
 
 #include "ROOT/RVec.hxx"
+#include "edm4hep/ClusterData.h"
 #include "edm4hep/MCParticleData.h"
 #include "edm4hep/ReconstructedParticleData.h"
 #include "edm4hep/TrackData.h"
 #include "edm4hep/TrackState.h"
 #include "edm4hep/VertexData.h"
+#include "k4DTF/CalorimeterResolution.h"
 #include "k4DTF/DecayDescriptor.h"
 
 namespace k4DTF {
@@ -41,6 +45,7 @@ using Vec_rp = ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData>;
 using Vec_mc = ROOT::VecOps::RVec<edm4hep::MCParticleData>;
 using Vec_ts = ROOT::VecOps::RVec<edm4hep::TrackState>;
 using Vec_trk = ROOT::VecOps::RVec<edm4hep::TrackData>;
+using Vec_cl = ROOT::VecOps::RVec<edm4hep::ClusterData>;
 using Vec_i = ROOT::VecOps::RVec<int>;
 using Vec_f = ROOT::VecOps::RVec<float>;
 using Vec_d = ROOT::VecOps::RVec<double>;
@@ -51,6 +56,9 @@ constexpr float kInvalid = -999.f;
 
 /// TrackState::location given to placeholder states of particles without a track.
 constexpr int kNoTrack = -1;
+
+/// ClusterData::type given to placeholder clusters of particles that are not photons.
+constexpr int kNoCluster = -1;
 
 // ---------------------------------------------------------------------------
 // Per reconstructed particle
@@ -70,6 +78,32 @@ Vec_i truthPDG(const Vec_i& recoMC, const Vec_mc& mc);
 /// location = kNoTrack. Uses the first track state of the first track.
 Vec_ts trackStatePerReco(const Vec_rp& recos, const Vec_i& rpTrackIdx, const Vec_trk& tracks,
                          const Vec_ts& trackStates);
+
+/// Photon cluster for every reconstructed particle, aligned with
+/// ReconstructedParticles, ready for the fit: position, energy and their
+/// errors. Particles that are not photons get a placeholder with
+/// type = kNoCluster and zero energy.
+///
+/// A neutral particle is a photon if its first cluster is in photonClusters
+/// (EFlowPhoton for Delphes). The cluster relation holds an index without
+/// the collection, and neutral hadrons point into EFlowNeutralHadron, so the
+/// cluster is accepted only if its energy equals the particle's (Delphes
+/// writes the same tower energy to both). Neutral particles with PDG 22 are
+/// photons without a matching cluster too.
+///
+/// What is missing is filled in, so that files from every k4SimDelphes
+/// version work (before v00-09, clusters have neither a position nor errors):
+///   - position: the cluster's; else the particle's reference point (set to
+///     the cluster position by v00-09); else where the particle's direction
+///     meets the calorimeter front face (calo.frontFace());
+///   - position covariance: the cluster's; else calo.positionCovariance();
+///   - energy: the particle's; its error: the cluster's, else from calo.
+/// With modelErrors the errors always come from calo, also for files that
+/// have them: k4SimDelphes v00-09 writes tower size / sqrt(12), while the
+/// error of a position drawn uniformly within the tower (Delphes
+/// SmearTowerCenter, as in the IDEA card) is tower size / sqrt(6).
+Vec_cl photonClusterPerReco(const Vec_rp& recos, const Vec_i& rpClusterIdx, const Vec_cl& photonClusters,
+                            const CalorimeterResolution& calo = CalorimeterResolution(), bool modelErrors = false);
 
 /// First element of a one-entry column such as magFieldBz, or def if empty.
 float firstOr(const Vec_f& v, float def);
@@ -140,6 +174,9 @@ Vec_rp leafParticles(const Candidates& c, const Vec_rp& recos, const Vec_ts& tsP
 
 /// Track state of leaf `leaf` for every candidate.
 Vec_ts leafTrackStates(const Candidates& c, const Vec_ts& tsPerReco, int leaf);
+
+/// Cluster (from photonClusterPerReco) of leaf `leaf` for every candidate.
+Vec_cl leafClusters(const Candidates& c, const Vec_cl& clusterPerReco, int leaf);
 
 /// Invariant mass [GeV] of flat node `node` for every candidate, with the
 /// descriptor's leaf mass hypotheses.

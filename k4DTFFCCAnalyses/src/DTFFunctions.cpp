@@ -104,7 +104,7 @@ DTFRunner::DTFRunner(const CandidateBuilder& builder, std::vector<int> massConst
 }
 
 std::vector<DTFParticle> DTFRunner::inputs(const Candidates& c, std::size_t j, const Vec_rp& recos,
-                                           const Vec_ts& tsPerReco, float Bz) const {
+                                           const Vec_ts& tsPerReco, float Bz, const Vec_cl& clusterPerReco) const {
   const auto& d = c.isCC.at(j) ? m_cc : m_desc;
   const auto& flat = d.flatten();
   const auto leafNodes = d.leafNodes();
@@ -117,8 +117,11 @@ std::vector<DTFParticle> DTFRunner::inputs(const Candidates& c, std::size_t j, c
     const int idx = cand[l];
     const auto& rp = recos.at(idx);
     const bool charged = static_cast<std::size_t>(idx) < tsPerReco.size() && tsPerReco[idx].location != kNoTrack;
+    const bool photon = !charged && static_cast<std::size_t>(idx) < clusterPerReco.size() &&
+                        clusterPerReco[idx].type != kNoCluster && clusterPerReco[idx].energy > 0;
     DTFParticle p = charged ? DTFParticle::fromEDM4hep(rp, tsPerReco[idx], Bz, node.mass)
-                            : DTFParticle::fromEDM4hep(rp);
+                    : photon ? DTFParticle::fromEDM4hep(rp, clusterPerReco[idx])
+                             : DTFParticle::fromEDM4hep(rp);
     if (!charged && node.mass >= 0) p.setMassHypothesis(node.mass);
     p.pdg = node.pdg;
     p.name = node.name;
@@ -128,17 +131,19 @@ std::vector<DTFParticle> DTFRunner::inputs(const Candidates& c, std::size_t j, c
 }
 
 k4DTF::DecayNodeInput DTFRunner::treeInput(const Candidates& c, std::size_t j, const Vec_rp& recos,
-                                           const Vec_ts& tsPerReco, float Bz) const {
-  return makeDecayNodeInput(c.isCC.at(j) ? m_cc : m_desc, inputs(c, j, recos, tsPerReco, Bz), m_massConstraints);
+                                           const Vec_ts& tsPerReco, float Bz, const Vec_cl& clusterPerReco) const {
+  return makeDecayNodeInput(c.isCC.at(j) ? m_cc : m_desc, inputs(c, j, recos, tsPerReco, Bz, clusterPerReco),
+                            m_massConstraints);
 }
 
-RVecFit DTFRunner::run(const Candidates& c, const Vec_rp& recos, const Vec_ts& tsPerReco, float Bz,
+RVecFit DTFRunner::run(const Candidates& c, const Vec_rp& recos, const Vec_ts& tsPerReco,
+                       const Vec_cl& clusterPerReco, float Bz,
                        const std::optional<k4DTF::InteractionPointInput>& pv) const {
   RVecFit out;
   out.reserve(c.leaves.size());
   for (std::size_t j = 0; j < c.leaves.size(); ++j) {
     try {
-      out.push_back(m_fitter.fit(treeInput(c, j, recos, tsPerReco, Bz), m_pv ? pv : std::nullopt));
+      out.push_back(m_fitter.fit(treeInput(c, j, recos, tsPerReco, Bz, clusterPerReco), m_pv ? pv : std::nullopt));
     } catch (const std::exception&) {
       k4DTF::FitResult failed;
       failed.status = k4DTF::ErrCode::badsetup;
@@ -150,12 +155,22 @@ RVecFit DTFRunner::run(const Candidates& c, const Vec_rp& recos, const Vec_ts& t
 
 RVecFit DTFRunner::operator()(const Candidates& c, const Vec_rp& recos, const Vec_ts& tsPerReco, float Bz,
                               const edm4hep::VertexData& pv) const {
-  return run(c, recos, tsPerReco, Bz, makeInteractionPoint(DTFVertex::fromEDM4hep(pv)));
+  return run(c, recos, tsPerReco, {}, Bz, makeInteractionPoint(DTFVertex::fromEDM4hep(pv)));
 }
 
 RVecFit DTFRunner::operator()(const Candidates& c, const Vec_rp& recos, const Vec_ts& tsPerReco,
                               float Bz) const {
-  return run(c, recos, tsPerReco, Bz, std::nullopt);
+  return run(c, recos, tsPerReco, {}, Bz, std::nullopt);
+}
+
+RVecFit DTFRunner::operator()(const Candidates& c, const Vec_rp& recos, const Vec_ts& tsPerReco,
+                              const Vec_cl& clusterPerReco, float Bz, const edm4hep::VertexData& pv) const {
+  return run(c, recos, tsPerReco, clusterPerReco, Bz, makeInteractionPoint(DTFVertex::fromEDM4hep(pv)));
+}
+
+RVecFit DTFRunner::operator()(const Candidates& c, const Vec_rp& recos, const Vec_ts& tsPerReco,
+                              const Vec_cl& clusterPerReco, float Bz) const {
+  return run(c, recos, tsPerReco, clusterPerReco, Bz, std::nullopt);
 }
 
 // --- extraction ------------------------------------------------------------

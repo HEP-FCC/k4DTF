@@ -11,20 +11,28 @@
 ///   recos, rpTracks              <-> ReconstructedParticles, _ReconstructedParticles_tracks.index
 ///   tracks, trackStates          <-> EFlowTrack, _EFlowTrack_trackStates
 ///   linkFrom, linkTo             <-> _RecoMCLink_from/_to.index
+///   rpClusters                   <-> _ReconstructedParticles_clusters.index
+///   photonClusters               <-> EFlowPhoton (clusters)
+///   neutralHadronClusters        <-> EFlowNeutralHadron (clusters)
 /// Charged reco particles get exact momenta and the exact helix of their MC
 /// particle (DTFTrack::fromPositionMomentum) with a diagonal covariance, and
-/// the pion mass/PDG like Delphes.
+/// the pion mass/PDG like Delphes. Photons get a cluster where they reach the
+/// calorimeter front face, written like k4SimDelphes before v00-09 (energy
+/// only) or from v00-09 (position, errors, reference point).
 
 #include <cmath>
 #include <vector>
 
+#include "Eigen/Dense"
 #include "Math/Point3D.h"
 #include "Math/Vector4D.h"
 #include "ROOT/RVec.hxx"
+#include "edm4hep/ClusterData.h"
 #include "edm4hep/MCParticleData.h"
 #include "edm4hep/ReconstructedParticleData.h"
 #include "edm4hep/TrackData.h"
 #include "edm4hep/TrackState.h"
+#include "k4DTF/CalorimeterResolution.h"
 #include "k4DTF/DTFParticle.h"
 #include "k4DTF/ParticleTable.h"
 
@@ -38,7 +46,14 @@ struct SyntheticEvent {
   ROOT::VecOps::RVec<edm4hep::TrackData> tracks;
   ROOT::VecOps::RVec<edm4hep::TrackState> trackStates;
   ROOT::VecOps::RVec<int> linkFrom, linkTo;
+  ROOT::VecOps::RVec<int> rpClusters;
+  ROOT::VecOps::RVec<edm4hep::ClusterData> photonClusters, neutralHadronClusters;
   double Bz{2.0};
+
+  /// How neutral particles' clusters are written.
+  enum class Clusters { EnergyOnly, WithPosition };
+  Clusters clusterStyle{Clusters::WithPosition};
+  CalorimeterResolution calo{};
 
   // relation bookkeeping while building
   std::vector<std::vector<int>> parentsOf, daughtersOf;
@@ -95,10 +110,49 @@ struct SyntheticEvent {
     } else {
       rp.tracks_begin = rp.tracks_end = static_cast<unsigned>(rpTracks.size());
     }
+    rp.clusters_begin = rp.clusters_end = static_cast<unsigned>(rpClusters.size());
+    if (p.charge == 0) {
+      const bool photon = p.PDG == 22;
+      if (!photon) {
+        rp.PDG = 130;
+        rp.mass = static_cast<float>(ParticleTable::mass(130));
+        rp.energy = static_cast<float>(std::sqrt(pmag * pmag + rp.mass * rp.mass));
+      }
+      edm4hep::ClusterData cl{};
+      cl.energy = rp.energy;
+      if (photon && clusterStyle == Clusters::WithPosition) {
+        const Eigen::Vector3d x = frontFaceFrom({p.vertex.x, p.vertex.y, p.vertex.z},
+                                                {p.momentum.x, p.momentum.y, p.momentum.z});
+        cl.position = {static_cast<float>(x.x()), static_cast<float>(x.y()), static_cast<float>(x.z())};
+        // k4SimDelphes v00-09 errors: size / sqrt(12)
+        CalorimeterResolution c12 = calo;
+        c12.smearTowerCenter = false;
+        const auto cov = c12.positionCovariance(x);
+        for (int a = 0; a < 3; ++a)
+          for (int b = 0; b <= a; ++b) cl.positionError[a * (a + 1) / 2 + b] = static_cast<float>(cov(a, b));
+        cl.energyError = static_cast<float>(std::sqrt(calo.energyVariance(rp.energy)));
+        rp.referencePoint = cl.position;
+      }
+      auto& coll = photon ? photonClusters : neutralHadronClusters;
+      rpClusters.push_back(static_cast<int>(coll.size()));
+      coll.push_back(cl);
+      rp.clusters_end = static_cast<unsigned>(rpClusters.size());
+    }
     recos.push_back(rp);
     linkFrom.push_back(static_cast<int>(recos.size()) - 1);
     linkTo.push_back(m);
     return static_cast<int>(recos.size()) - 1;
+  }
+
+  /// Where a straight line from x along p reaches the calorimeter front face.
+  Eigen::Vector3d frontFaceFrom(const Eigen::Vector3d& x0, const Eigen::Vector3d& p) const {
+    const Eigen::Vector3d n = p.normalized();
+    const double a = n.x() * n.x() + n.y() * n.y();
+    const double b = x0.x() * n.x() + x0.y() * n.y();
+    const double c = x0.x() * x0.x() + x0.y() * x0.y() - calo.radius * calo.radius;
+    double t = a > 0 ? (-b + std::sqrt(b * b - a * c)) / a : 1e30;
+    if (n.z() != 0) t = std::min(t, ((n.z() > 0 ? calo.halfLength : -calo.halfLength) - x0.z()) / n.z());
+    return x0 + t * n;
   }
 
   /// Fill the begin/end ranges and the flat relation columns.
@@ -194,6 +248,41 @@ inline BdChain addBdChain(SyntheticEvent& ev, int zIndex, const ROOT::Math::XYZP
   const auto [k4, piD4] = twoBody(d04, mK, mPi, 0.7, -0.4);
   c.K = ev.addMC(s * 321, k4, c.dVertex, c.D0);
   c.piD0 = ev.addMC(-s * 211, piD4, c.dVertex, c.D0);
+  return c;
+}
+
+/// Indices of the MC particles of B- -> (D0 -> K- pi+ (pi0 -> gamma gamma)) pi-.
+struct BuPi0Chain {
+  int B, D0, K, piD0, pi0, g1, g2, piB;
+  ROOT::Math::XYZPoint pv, bVertex, dVertex;
+};
+
+/// Add B- -> (D0 -> K- pi+ (pi0 -> gamma gamma)) pi- (fixed kinematics; the
+/// K- pi+ pair has a mass of 1.0 GeV).
+inline BuPi0Chain addBuPi0Chain(SyntheticEvent& ev, int zIndex, const ROOT::Math::XYZPoint& pv,
+                                double ctauB = 0.491, double ctauD = 0.123) {
+  const double mB = ParticleTable::mass(521), mD0 = ParticleTable::mass(421), mPi0 = ParticleTable::mass(111);
+  const double mK = ParticleTable::mass(321), mPi = ParticleTable::mass(211), mKpi = 1.0;
+  const double pB[3] = {-9.0, 14.0, 6.0};
+  const ROOT::Math::PxPyPzEVector b4(pB[0], pB[1], pB[2],
+                                     std::sqrt(pB[0] * pB[0] + pB[1] * pB[1] + pB[2] * pB[2] + mB * mB));
+  BuPi0Chain c{};
+  c.pv = pv;
+  c.B = ev.addMC(-521, b4, pv, zIndex);
+  c.bVertex = flight(pv, b4, ctauB);
+  const auto [d04, piB4] = twoBody(b4, mD0, mPi, -0.2, 0.7);
+  c.D0 = ev.addMC(421, d04, c.bVertex, c.B);
+  c.piB = ev.addMC(-211, piB4, c.bVertex, c.B);
+
+  c.dVertex = flight(c.bVertex, d04, ctauD);
+  const auto [kpi4, pi04] = twoBody(d04, mKpi, mPi0, 0.4, 2.5);
+  const auto [k4, pi4] = twoBody(kpi4, mK, mPi, -0.6, 0.3);
+  c.K = ev.addMC(-321, k4, c.dVertex, c.D0);
+  c.piD0 = ev.addMC(211, pi4, c.dVertex, c.D0);
+  c.pi0 = ev.addMC(111, pi04, c.dVertex, c.D0);
+  const auto [g14, g24] = twoBody(pi04, 0.0, 0.0, 0.5, -1.2);
+  c.g1 = ev.addMC(22, g14, c.dVertex, c.pi0);  // pi0 decay: no flight
+  c.g2 = ev.addMC(22, g24, c.dVertex, c.pi0);
   return c;
 }
 

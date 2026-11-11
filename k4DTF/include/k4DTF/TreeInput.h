@@ -17,8 +17,10 @@ namespace k4DTF {
 /// - leaves: one DTFParticle per leaf of the descriptor, in depth-first leaf
 ///   order (DecayDescriptor::leafNodes()). Charged leaves with a track become
 ///   helix measurements; charged leaves without one use their 3-momentum and
-///   the (px, py, pz) block of DTFParticle::cov. Neutral leaves are not
-///   supported yet (std::invalid_argument).
+///   the (px, py, pz) block of DTFParticle::cov. Photons need their
+///   calorimeter cluster (DTFParticle::cluster); they are assumed to come
+///   from their mother's vertex (for a pi0, the vertex where it is made).
+///   Other neutral leaves are not supported (std::invalid_argument).
 /// - Masses: every node gets the nominal mass of its PDG code
 ///   (ParticleTable); for leaves that is the mass hypothesis of the track.
 /// - Composites decaying strongly or electromagnetically

@@ -55,7 +55,8 @@ using RVecFit = ROOT::VecOps::RVec<k4DTF::FitResult>;
 /// below instead of refitting per output column.
 ///
 /// Leaves are passed with the descriptor's mass hypotheses and, for charged
-/// leaves, their track state and Bz. Mass constraints use the nominal masses
+/// leaves, their track state and Bz; photons with their cluster
+/// (photonClusterPerReco; the overloads without clusters fail on photons). Mass constraints use the nominal masses
 /// (ParticleTable) and apply to the listed PDG codes and their charge
 /// conjugates. Declare one instance per configuration at global scope in the
 /// analysis script; operator() is const and thread safe.
@@ -71,13 +72,20 @@ public:
   /// Fit without a primary vertex.
   RVecFit operator()(const Candidates& c, const Vec_rp& recos, const Vec_ts& tsPerReco, float Bz) const;
 
-  /// Leaves of candidate j as DTFParticles (mass hypotheses, tracks attached).
+  /// Fit with photons: clusterPerReco from photonClusterPerReco().
+  RVecFit operator()(const Candidates& c, const Vec_rp& recos, const Vec_ts& tsPerReco, const Vec_cl& clusterPerReco,
+                     float Bz, const edm4hep::VertexData& pv) const;
+  RVecFit operator()(const Candidates& c, const Vec_rp& recos, const Vec_ts& tsPerReco, const Vec_cl& clusterPerReco,
+                     float Bz) const;
+
+  /// Leaves of candidate j as DTFParticles (mass hypotheses, tracks and
+  /// clusters attached).
   std::vector<DTFParticle> inputs(const Candidates& c, std::size_t j, const Vec_rp& recos,
-                                  const Vec_ts& tsPerReco, float Bz) const;
+                                  const Vec_ts& tsPerReco, float Bz, const Vec_cl& clusterPerReco = {}) const;
 
   /// Fitter input of candidate j.
   k4DTF::DecayNodeInput treeInput(const Candidates& c, std::size_t j, const Vec_rp& recos, const Vec_ts& tsPerReco,
-                                  float Bz) const;
+                                  float Bz, const Vec_cl& clusterPerReco = {}) const;
 
 private:
   DecayDescriptor m_desc;
@@ -86,8 +94,8 @@ private:
   bool m_pv;
   k4DTF::DecayTreeFitter m_fitter;
 
-  RVecFit run(const Candidates& c, const Vec_rp& recos, const Vec_ts& tsPerReco, float Bz,
-              const std::optional<k4DTF::InteractionPointInput>& pv) const;
+  RVecFit run(const Candidates& c, const Vec_rp& recos, const Vec_ts& tsPerReco, const Vec_cl& clusterPerReco,
+              float Bz, const std::optional<k4DTF::InteractionPointInput>& pv) const;
 };
 
 /// Fit status as the k4DTF::ErrCode bit pattern: 0 = success.
