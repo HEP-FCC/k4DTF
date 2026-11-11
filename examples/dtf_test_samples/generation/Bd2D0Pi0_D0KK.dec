@@ -1,0 +1,34 @@
+# EvtGen user decay file for k4DTF test samples
+#
+#   B0 -> anti-D0 pi0,  anti-D0 -> K+ K-   (+ c.c.)
+#
+# Use with DelphesPythia8EvtGen_EDM4HEP_k4Interface ... 511 Bd_SIGNAL 1
+# Only the B chosen as signal follows this chain; all other hadrons decay
+# according to DECAY.DEC.
+
+Alias      Bd_SIGNAL       B0
+Alias      Bdbar_SIGNAL    anti-B0
+ChargeConj Bd_SIGNAL       Bdbar_SIGNAL
+#
+Alias      MyAnti-D0       anti-D0
+Alias      MyD0            D0
+ChargeConj MyAnti-D0       MyD0
+#
+Alias      MyPi0           pi0
+ChargeConj MyPi0           MyPi0
+#
+Decay Bd_SIGNAL
+  1.000    MyAnti-D0      MyPi0          PHSP;
+Enddecay
+CDecay Bdbar_SIGNAL
+#
+Decay MyAnti-D0
+  1.000    K+         K-          PHSP;
+Enddecay
+CDecay MyD0
+#
+Decay MyPi0
+  1.000    gamma      gamma        PHSP;
+Enddecay
+#
+End

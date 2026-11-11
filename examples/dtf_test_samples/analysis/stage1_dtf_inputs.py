@@ -1,4 +1,4 @@
-\65;6402;1c# SPDX-FileCopyrightText: Copyright (c) 2026 CERN
+# SPDX-FileCopyrightText: Copyright (c) 2026 CERN
 # SPDX-License-Identifier: Apache-2.0
 '''
 FCCAnalyses stage 1 for k4DTF tests: build decay-tree candidates, attach MC
@@ -62,13 +62,20 @@ MODES = {
         'fits': {'DTF': ([], False), 'DTFPV': ([421,310], True)},
         'derived': {},
     },
-    'Bu2D0Pi_KPiPi0': {
+    'Bu2D0Pi_D02KPiPi0': {
         'descriptor': 'B- -> (D0 -> K- pi+ (pi0 -> gamma gamma)) pi-',
-        'labels': ['B', 'D0', 'KD0', 'piD0', 'pi0', 'g1', 'g2', 'piB'],
+        'labels': ['B', 'D0', 'D0_K', 'D0_pi', 'D0_pi0', 'pi0_g1', 'pi0_g2', 'B_pi'],
         'mass_windows': {521: (4.8, 5.8), 421: (1.70, 2.00), 111: (0.09, 0.18)},
         'fits': {'DTF': ([], False), 'DTFPV': ([421, 111], True)},
         'derived': {},
     },
+    'Bd2D0Pi0_D02KK': {
+        'descriptor': 'B0 -> (D~0 -> K- K+) (pi0 -> gamma gamma)',
+        'labels': ['B', 'D0', 'D0_Km', 'D0_Kp', 'B_pi0', 'pi0_g1', 'pi0_g2'],
+        'mass_windows': {511: (4.9, 5.7), 421: (1.70, 2.00), 111: (0.09, 0.18)},
+        'fits': {'DTF': ([], False), 'DTFPV': ([511,421, 111], True)},
+        'derived': {},
+    },    
 }
 
 # Photon resolution for clusters written without errors (k4SimDelphes before
