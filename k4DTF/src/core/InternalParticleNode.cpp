@@ -8,6 +8,11 @@
 
 #include "core/FitParams.h"
 #include "core/Projection.h"
+#include "core/ResonanceNode.h"
+#include "core/TrackNode.h"
+#include "k4DTF/core/Helix.h"
+
+#include <vector>
 
 namespace k4dtf {
 
@@ -37,6 +42,8 @@ ErrCode InternalParticleNode::initPar1(FitParams* fitparams) {
     status |= dau->initPar1(fitparams);
   }
 
+  seedVertex(fitparams);
+
   for (int row = 0; row < 3; ++row) {
     if (fitparams->par(posindex + row) != 0) break;
     if (row == 2) {
@@ -56,6 +63,51 @@ ErrCode InternalParticleNode::initPar1(FitParams* fitparams) {
   initMom(fitparams);
 
   return status;
+}
+
+namespace {
+
+/// Helix tracks produced at the vertex of `node`: its track daughters and
+/// those of its resonance daughters, which decay at the same vertex.
+void collectHelices(const ParticleNode* node, std::vector<const HelixMeasurement*>& out) {
+  for (const auto* dau : node->daughters()) {
+    if (const auto* t = dynamic_cast<const TrackNode*>(dau)) {
+      if (const auto* h = t->helixMeasurement()) out.push_back(h);
+    } else if (dynamic_cast<const ResonanceNode*>(dau)) {
+      collectHelices(dau, out);
+    }
+  }
+}
+
+}  // namespace
+
+void InternalParticleNode::seedVertex(FitParams* fitparams) const {
+  std::vector<const HelixMeasurement*> helices;
+  collectHelices(this, helices);
+  if (helices.size() < 2) return;
+
+  // the pair crossing at the largest angle gives the best-defined point
+  std::size_t best1 = 0, best2 = 1;
+  double bestSin = -1;
+  for (std::size_t i = 0; i < helices.size(); ++i)
+    for (std::size_t j = i + 1; j < helices.size(); ++j) {
+      const double s = std::abs(std::sin(helices[i]->par(helix::Phi) - helices[j]->par(helix::Phi)));
+      if (s > bestSin) {
+        bestSin = s;
+        best1 = i;
+        best2 = j;
+      }
+    }
+
+  // candidates compatible within 5 sigma of the impact parameters
+  const auto& h1 = *helices[best1];
+  const auto& h2 = *helices[best2];
+  const double sigma = std::sqrt(h1.cov(helix::D0, helix::D0) + h1.cov(helix::Z0, helix::Z0) +
+                                 h2.cov(helix::D0, helix::D0) + h2.cov(helix::Z0, helix::Z0));
+  Eigen::Vector3d vertex;
+  if (!helix::intersect(h1.par, h1.referencePoint, h2.par, h2.referencePoint, vertex, 5 * sigma)) return;
+  const int posindex = posIndex();
+  for (int row = 0; row < 3; ++row) fitparams->setPar(posindex + row, vertex(row));
 }
 
 ErrCode InternalParticleNode::initPar2(FitParams* fitparams) {

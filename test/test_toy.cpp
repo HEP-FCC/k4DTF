@@ -109,6 +109,49 @@ TEST_CASE("Analytic helix Jacobian matches numerical derivatives", "[helix]") {
   }
 }
 
+TEST_CASE("Helix positions and momenta along the track", "[helix]") {
+  const double Bz = 2.0;
+  const Eigen::Vector3d ref(0.1, -0.05, 0.2);
+  for (double q : {+1.0, -1.0}) {
+    const Eigen::Vector3d x(310.0, -150.0, 80.0), p(0.8, 0.3, -0.4);
+    const auto par = helix::fromPositionMomentum(x, p, q, Bz, ref);
+    const double s = helix::arcLengthNear(par, x, ref);
+    CHECK((helix::positionAt(par, s, ref) - x).norm() < 1e-9);
+    CHECK((helix::momentumAt(par, Bz, s) - p).norm() < 1e-12);
+    CHECK((helix::positionAt(par, 0.0, ref) - helix::pca(par, ref)).norm() < 1e-12);
+    // the track moves outwards from x: the PCA to the reference is behind it
+    CHECK(s > 0);
+  }
+}
+
+TEST_CASE("Two-helix vertex seed", "[helix]") {
+  const double Bz = 2.0;
+  auto seed = [&](const Eigen::Vector3d& v, const Eigen::Vector3d& p1, const Eigen::Vector3d& p2,
+                  double tolerance = 1e-3) {
+    Eigen::Vector3d out;
+    REQUIRE(helix::intersect(helix::fromPositionMomentum(v, p1, +1, Bz), Eigen::Vector3d::Zero(),
+                             helix::fromPositionMomentum(v, p2, -1, Bz), Eigen::Vector3d::Zero(), out, tolerance));
+    return out;
+  };
+  // D0 a few mm from the beam, KS at 40 cm, and nearly parallel daughters
+  // (crossing angle ~2 deg) of a prompt-ish decay and of a boosted KS
+  const Eigen::Vector3d d0(1.2, -0.8, 2.0), ks(280.0, 290.0, -100.0);
+  CHECK((seed(d0, {1.5, 0.4, 0.8}, {0.3, -1.1, 2.0}) - d0).norm() < 1e-6);
+  CHECK((seed(ks, {0.9, 0.7, -0.2}, {0.4, 1.2, -0.3}) - ks).norm() < 1e-6);
+  CHECK((seed(d0, {8.0, 0.0, 1.0}, {7.0, 0.25, 1.1}) - d0).norm() < 1e-6);
+  CHECK((seed(ks, {5.0, 5.2, -1.8}, {4.5, 4.9, -1.6}) - ks).norm() < 1e-6);
+  // Nearly parallel daughters seen with errors: the helices come within
+  // 61 um of each other at the point nearest the beam, a 1.4 mm displaced
+  // vertex is not resolved with a 0.1 mm tolerance and the seed is the
+  // point nearest the beam. The fit takes it from there.
+  CHECK((seed(d0, {8.0, 0.0, 1.0}, {7.0, 0.25, 1.1}, 0.1) - Eigen::Vector3d(0.0150, -0.8209, 1.8331)).norm() < 1e-3);
+  // A boosted KS whose daughters also cross exactly 12 cm behind the beam
+  // line: the crossing ahead of the beam is the vertex.
+  const Eigen::Vector3d ks2(21.2, 390.3, 309.1);
+  CHECK((seed(ks2, {0.2826107255, 2.383302578, 1.893404036}, {-0.04807012709, 1.899391814, 1.49834698}, 0.2) - ks2)
+            .norm() < 1e-4);
+}
+
 TEST_CASE("Phi wrapping", "[helix]") {
   CHECK_THAT(helix::wrapPhi(3 * toy::kPi), WithinAbs(toy::kPi, 1e-12));
   CHECK_THAT(helix::wrapPhi(-toy::kPi), WithinAbs(toy::kPi, 1e-12));
@@ -141,7 +184,7 @@ struct ToyResult {
 
 /// Fit nEvents toy decays and collect pulls by "<node index>_<quantity>".
 ToyResult runToy(toy::Particle (*make)(), bool withPV, int nEvents, unsigned seed,
-                 const std::vector<int>& massConstrained) {
+                 const std::vector<int>& massConstrained, double maxDecayRadius = 1e9) {
   toy::Generator gen(seed);
   std::normal_distribution<double> n01(0, 1);
   const Eigen::Vector3d bs(4.5e-3, 2e-5, 0.3);  // luminous region [mm]
@@ -151,6 +194,8 @@ ToyResult runToy(toy::Particle (*make)(), bool withPV, int nEvents, unsigned see
     auto head = make();
     const Eigen::Vector3d pv(bs(0) * n01(gen.rng()), bs(1) * n01(gen.rng()), bs(2) * n01(gen.rng()));
     gen.generate(head, pv);
+    // decays outside the tracker would not be reconstructed
+    while (toy::maxDecayRadius(head) > maxDecayRadius) gen.generate(head, pv);
     std::optional<InteractionPointInput> ip;
     if (withPV) ip = InteractionPointInput{Eigen::Vector3d::Zero(), Eigen::Vector3d(bs.cwiseProduct(bs)).asDiagonal()};
     const auto r = dtf.fit(gen.input(head, massConstrained), ip);
@@ -214,4 +259,11 @@ TEST_CASE("Toy B0 -> (K*0 -> K+ pi-) gamma with primary vertex: photons in all d
   // Photons cover |cos theta| < 0.8 around the B direction, so many are in the
   // barrel (pz ~ 0), where a px/pz, py/pz parametrisation would diverge.
   checkToy(runToy(toy::BdToKstGamma, true, 600, 4, {}), 3);
+}
+
+TEST_CASE("Toy B0 -> (J/psi -> mu+ mu-) (KS0 -> pi+ pi-) with primary vertex: KS up to 60 cm", "[toy][seed]") {
+  // 4 helices (20) + PV (3) - B vertex+flight (4) - KS flight (1) - momenta (12) = 6
+  // Without vertex seeding about 1% of these fits fail and others converge
+  // to wrong minima (<chi2> ~ 4000).
+  checkToy(runToy(toy::BdToJpsiKS, true, 600, 5, {}, 600.0), 6);
 }

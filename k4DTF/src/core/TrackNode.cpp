@@ -36,10 +36,21 @@ ErrCode TrackNode::initPar1(FitParams* /*fitparams*/) {
 }
 
 ErrCode TrackNode::initPar2(FitParams* fitparams) {
+  // The mother's vertex is initialised by now. A helix track starts with its
+  // momentum at the point of the helix closest to that vertex rather than at
+  // the PCA to the reference point: for a KS decaying at 40 cm, the
+  // direction differs by ~0.25 rad at pT = 1 GeV.
+  Eigen::Vector3d p = m_momentum;
+  const int posindex = mother() ? mother()->posIndex() : -1;
+  if (m_helix && posindex >= 0) {
+    const Eigen::Vector3d vtx(fitparams->par(posindex), fitparams->par(posindex + 1), fitparams->par(posindex + 2));
+    const double s = helix::arcLengthNear(m_helix->par, vtx, m_helix->referencePoint);
+    p = helix::momentumAt(m_helix->par, m_helix->Bz, s);
+  }
   int momindex = momIndex();
-  fitparams->setPar(momindex + 0, m_momentum(0));
-  fitparams->setPar(momindex + 1, m_momentum(1));
-  fitparams->setPar(momindex + 2, m_momentum(2));
+  fitparams->setPar(momindex + 0, p(0));
+  fitparams->setPar(momindex + 1, p(1));
+  fitparams->setPar(momindex + 2, p(2));
   return ErrCode::success;
 }
 

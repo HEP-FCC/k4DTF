@@ -30,6 +30,11 @@ public:
 
 protected:
   ErrCode initMom(FitParams* fitparams) const;
+
+  /// Seed the decay vertex from the intersection of two helix tracks made at
+  /// it (directly or through resonances); leaves it unchanged if there are
+  /// fewer than two.
+  void seedVertex(FitParams* fitparams) const;
 };
 
 } // namespace k4dtf

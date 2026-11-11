@@ -48,6 +48,33 @@ Eigen::Vector3d momentum(const Vector5d& par, double Bz);
 /// Point of closest approach [mm].
 Eigen::Vector3d pca(const Vector5d& par, const Eigen::Vector3d& reference = Eigen::Vector3d::Zero());
 
+/// Point on the helix at signed transverse arc length s [mm] from the PCA
+/// (s > 0 along the momentum). The helix turns by -omega s.
+Eigen::Vector3d positionAt(const Vector5d& par, double s, const Eigen::Vector3d& reference = Eigen::Vector3d::Zero());
+
+/// Momentum [GeV] at arc length s.
+Eigen::Vector3d momentumAt(const Vector5d& par, double Bz, double s);
+
+/// Arc length of the point of the helix closest to `point` in the transverse
+/// plane (within half a turn of the PCA).
+double arcLengthNear(const Vector5d& par, const Eigen::Vector3d& point,
+                     const Eigen::Vector3d& reference = Eigen::Vector3d::Zero());
+
+/// Approximate common point of two helices, to seed a vertex fit. Candidates
+/// in the transverse plane: the intersections of the two circles (or, if
+/// they do not meet, their closest points), and the points closest to the
+/// reference point. Of the candidates where the helices are within
+/// `tolerance` [mm] of their smallest 3D distance, the one nearest the beam
+/// line (reference point) is returned, as the midpoint between the helices.
+/// Candidates more than 1 mm behind the reference point, along the pair's
+/// transverse momentum, are only taken if there is no other.
+/// (Nearly parallel tracks stay close over a long stretch, and their circles
+/// also cross far away.) A tolerance of a few times the impact-parameter
+/// resolution separates real ambiguities from boosted displaced decays.
+/// Returns false for (near) concentric circles.
+bool intersect(const Vector5d& par1, const Eigen::Vector3d& ref1, const Vector5d& par2,
+               const Eigen::Vector3d& ref2, Eigen::Vector3d& vertex, double tolerance = 0.1);
+
 /// Charge [e] from the sign of omega and Bz (0 if either is 0).
 double charge(const Vector5d& par, double Bz);
 

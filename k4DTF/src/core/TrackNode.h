@@ -34,6 +34,7 @@ public:
   ErrCode filter(const FitParams& reference, FitParams& params) const override;
 
   bool hasHelix() const { return m_helix.has_value(); }
+  const HelixMeasurement* helixMeasurement() const { return m_helix ? &*m_helix : nullptr; }
 
 private:
   ErrCode projectTrackConstraint(const FitParams& fitparams, Projection& p) const;

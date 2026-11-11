@@ -82,6 +82,21 @@ inline Particle BdToKstGamma() {
   return composite(511, "B0", mB, 0.455, {Kst, leaf(22, "gamma", 0.0, 0)});
 }
 
+/// B0 -> (J/psi -> mu+ mu-) (KS0 -> pi+ pi-): a KS flying tens of cm
+inline Particle BdToJpsiKS() {
+  const double mMu = 0.1056584, mPi = 0.13957, mJpsi = 3.096916, mKS = 0.497614, mB = 5.27958;
+  auto Jpsi = composite(443, "J/psi", mJpsi, 0.0, {leaf(-13, "mu+", mMu, +1), leaf(13, "mu-", mMu, -1)}, true);
+  auto KS = composite(310, "KS0", mKS, 26.84, {leaf(211, "pi+", mPi, +1), leaf(-211, "pi-", mPi, -1)});
+  return composite(511, "B0", mB, 0.455, {Jpsi, KS});
+}
+
+/// Largest transverse decay radius [mm] of any composite in the tree.
+inline double maxDecayRadius(const Particle& p) {
+  double r = p.daughters.empty() ? 0.0 : std::hypot(p.decay.x(), p.decay.y());
+  for (const auto& d : p.daughters) r = std::max(r, maxDecayRadius(d));
+  return r;
+}
+
 class Generator {
 public:
   explicit Generator(unsigned seed, double Bz = 2.0) : m_rng(seed), m_Bz(Bz) {}
